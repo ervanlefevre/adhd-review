@@ -26,6 +26,10 @@ export class StickyBar {
     this.detail = this.root.querySelector(".adhd-detail");
     this.keys = this.root.querySelector(".adhd-keys");
     this.root.querySelector(".adhd-panel").addEventListener("click", onOpenPanel);
+    this.focusSink = document.createElement("span");
+    this.focusSink.tabIndex = -1;
+    this.focusSink.className = "adhd-focus-sink";
+    this.root.append(this.focusSink);
     this.root.querySelector(".adhd-path").addEventListener("click", onCopyPath);
     this.help = null;
     this.messageTimer = null;

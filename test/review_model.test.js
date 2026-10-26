@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseRulesText, defaultRules, DEFAULT_RULES_TEXT, OTHER_GROUP_LABEL } from "../src/rules.js";
-import { orderFiles, groupFiles, progress, neighbourFile, nextPendingFile, positionInGroup } from "../src/review_model.js";
+import { orderFiles, groupFiles, progress, neighbourFile, nextPendingFile, positionInGroup, displayPath } from "../src/review_model.js";
 
 const file = (path, additions = 10, deletions = 0, viewerViewedState = "UNVIEWED") => ({ path, additions, deletions, viewerViewedState });
 
@@ -63,4 +63,12 @@ test("neighbourFile wraps around and nextPendingFile skips viewed and later file
   assert.equal(neighbourFile(ordered, "unknown", 1).path, "a.rb");
   assert.equal(nextPendingFile(ordered, "c.rb", new Set(["b.rb"])).path, "c.rb");
   assert.equal(nextPendingFile(ordered, "a.rb", new Set(["b.rb", "c.rb"])), null);
+});
+
+test("displayPath drops the matched prefix but never the whole path", () => {
+  assert.equal(displayPath("app/views/back_office/x.html.erb", /^app\/(views|mailers)\//), "back_office/x.html.erb");
+  assert.equal(displayPath("CLAUDE.md", /^(doc\/|CLAUDE\.md|README)/), "CLAUDE.md");
+  assert.equal(displayPath("lib/foo_spec.rb", /_spec\.rb$/), "lib/foo_spec.rb");
+  const [file] = orderFiles([{ path: "config/locales/de-de/x.yml", additions: 1, deletions: 0 }], defaultRules());
+  assert.equal(file.displayPath, "de-de/x.yml");
 });

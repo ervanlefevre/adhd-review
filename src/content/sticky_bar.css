@@ -113,6 +113,8 @@ body.adhd-review-active { padding-bottom: 44px !important; }
 
 /* Sidebar, icon and edge strip: layout is set inline by drawer.js; only colours here. */
 #adhd-review-drawer { background: #ffffff; border-left: 1px solid #d0d7de; box-shadow: -8px 0 24px #01040926; }
+#adhd-review-drawer.focused { border-left: 3px solid #388bfd; }
+#adhd-review-bar .adhd-focus-sink { width: 0; height: 0; overflow: hidden; outline: none; }
 #adhd-review-drawer .adhd-drawer-close {
   border: 1px solid #d0d7de;
   border-radius: 6px;

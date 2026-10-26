@@ -134,6 +134,11 @@ export class Drawer {
     return this.isOpen ? this.close() : this.open();
   }
 
+  // Blue edge while the keyboard focus is inside the panel.
+  setFocused(focused) {
+    this.root.classList.toggle("focused", focused);
+  }
+
   pushPage(open) {
     const html = document.documentElement;
     if (open) {

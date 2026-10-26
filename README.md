@@ -33,7 +33,7 @@ The token is stored in `chrome.storage.local` of this profile only and is sent t
 | `r` | refresh from GitHub |
 | `?` | show the keys |
 
-Keys are configurable in the options and ignored while typing in a field.
+Keys are configurable in the options and ignored while typing in a field. They also work while the sidebar has the focus (outside its text fields); `Escape` in the sidebar hands the focus back to the page, and so does jumping to a file from it. The sidebar's file list hides the part of the path its group rule matched; the full path is in the tooltip and in the bar.
 
 ## Review order and progress
 

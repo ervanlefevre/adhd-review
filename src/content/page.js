@@ -41,6 +41,9 @@ class ReviewPage {
     new MutationObserver(() => this.scheduleRescan()).observe(document.documentElement, { childList: true, subtree: true });
     window.addEventListener("scroll", () => this.scheduleDetect(), { passive: true });
     window.addEventListener("hashchange", () => this.scheduleRescan());
+    // The window blurs when the focus enters the sidebar's iframe: show it.
+    window.addEventListener("blur", () => setTimeout(() => this.drawer.setFocused(document.activeElement === this.drawer.frame), 0));
+    window.addEventListener("focus", () => this.drawer.setFocused(false));
     setInterval(() => this.checkUrl(), 500);
     this.checkUrl();
   }
@@ -329,6 +332,13 @@ class ReviewPage {
     return this.drawer.toggle();
   }
 
+  // Moves the keyboard focus out of the panel's iframe back into the page, on an
+  // element of ours so GitHub's own focus styles are not triggered.
+  focusPage() {
+    window.focus();
+    this.bar.focusSink.focus({ preventScroll: true });
+  }
+
   async copyPath() {
     if (!this.currentPath) return;
     await navigator.clipboard.writeText(this.currentPath);
@@ -344,11 +354,19 @@ class ReviewPage {
       return;
     }
     if (event.metaKey || event.ctrlKey || event.altKey) return;
-    const keys = this.settings.keys;
-    const action = Object.keys(keys).find((name) => keys[name] === event.key);
+    const action = this.actionForKey(event.key);
     if (!action) return;
     event.preventDefault();
     event.stopPropagation();
+    this.runAction(action);
+  }
+
+  actionForKey(key) {
+    const keys = this.settings?.keys || {};
+    return Object.keys(keys).find((name) => keys[name] === key) || null;
+  }
+
+  runAction(action) {
     this.bar.hideHelp();
     switch (action) {
       case "next":
@@ -392,6 +410,15 @@ class ReviewPage {
           if (target) target.scrollIntoView({ block: "center" });
           else location.hash = anchor;
         }
+        break;
+      case "keyPress":
+        if (message.prKey === this.pr.prKey && this.remote) {
+          const action = this.actionForKey(message.key);
+          if (action) await this.runAction(action);
+        }
+        break;
+      case "focusPage":
+        this.focusPage();
         break;
       case "remoteStateChanged":
         if (message.prKey === this.pr.prKey) {

@@ -153,9 +153,10 @@ function renderProgress() {
         const viewed = isViewed(file);
         const item = element("li", { className: `${viewed ? "viewed" : ""} ${file.path === currentPath ? "current" : ""}`, title: file.path });
         item.append(element("span", { className: "icon", textContent: viewed ? "✓" : "·" }));
-        const slash = file.path.lastIndexOf("/");
+        const shown = file.displayPath || file.path;
+        const slash = shown.lastIndexOf("/");
         const name = element("span", { className: "name" });
-        name.append(element("span", { className: "dir", textContent: slash === -1 ? "" : file.path.slice(0, slash + 1) }), file.path.slice(slash + 1));
+        name.append(element("span", { className: "dir", textContent: slash === -1 ? "" : shown.slice(0, slash + 1) }), shown.slice(slash + 1));
         item.append(name);
         if (commentsByPath[file.path]) item.append(element("span", { className: "badge comments", textContent: `💬 ${commentsByPath[file.path]}` }));
         if (later[file.path]) item.append(element("span", { className: "badge later", textContent: "later" }));
@@ -235,15 +236,36 @@ function element(tag, props = {}, ...children) {
 
 // ---- actions --------------------------------------------------------------
 
-function goToFile(path) {
+function tellPage(message) {
   if (state.tabId === null) return;
-  chrome.tabs.sendMessage(state.tabId, { type: "goToFile", prKey: state.prKey, path }).catch(() => {});
+  chrome.tabs.sendMessage(state.tabId, { ...message, prKey: state.prKey }).catch(() => {});
+}
+
+// Jumping to something in the diff hands the keyboard focus back to the page.
+function goToFile(path) {
+  tellPage({ type: "goToFile", path });
+  tellPage({ type: "focusPage" });
 }
 
 function goToComment(comment) {
-  if (state.tabId === null) return;
-  chrome.tabs.sendMessage(state.tabId, { type: "goToComment", prKey: state.prKey, path: comment.path, databaseId: comment.databaseId }).catch(() => {});
+  tellPage({ type: "goToComment", path: comment.path, databaseId: comment.databaseId });
+  tellPage({ type: "focusPage" });
 }
+
+// Review keys pressed in the panel (outside a text field) act on the page, so the
+// focus never silently swallows a "mark viewed". Escape always returns to the page.
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    document.activeElement?.blur();
+    tellPage({ type: "focusPage" });
+    return;
+  }
+  if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
+  if (event.target.closest("input, textarea, select, [contenteditable='true']")) return;
+  tellPage({ type: "keyPress", key: event.key });
+  event.preventDefault();
+});
 
 async function markGroupViewed(group) {
   const pending = group.files.filter((file) => !isViewed(file));

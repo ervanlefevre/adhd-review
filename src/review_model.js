@@ -20,9 +20,19 @@ export function orderFiles(files, rules, { lineCap = DEFAULT_LINE_CAP } = {}) {
       group: rule ? rule.label : OTHER_GROUP_LABEL,
       ruleIndex: ruleIndex === -1 ? rules.length : ruleIndex,
       weight: cappedLines * groupWeight,
+      displayPath: rule ? displayPath(file.path, rule.pattern) : file.path,
     };
   });
   return tagged.sort((a, b) => a.ruleIndex - b.ruleIndex || a.path.localeCompare(b.path));
+}
+
+// The path without the part the group's rule matched at its start: what the group
+// already says ("app/views/") is not repeated on every file. Falls back to the full
+// path when the match is not a prefix or would leave nothing.
+export function displayPath(path, pattern) {
+  const match = new RegExp(pattern.source, pattern.flags.replace("g", "")).exec(path);
+  if (!match || match.index !== 0 || match[0].length === 0 || match[0].length >= path.length) return path;
+  return path.slice(match[0].length);
 }
 
 export function isViewed(file) {
