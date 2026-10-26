@@ -70,7 +70,9 @@ section[hidden] { display: none; }
 .track .fill { height: 100%; background: var(--success); transition: width 200ms; }
 .track.small { height: 5px; }
 
-details.group { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; background: var(--bg); }
+details.group { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; background: var(--bg); scroll-margin-top: 96px; }
+details.group.active { border-color: var(--accent); }
+details.group.active summary .label { color: var(--accent); }
 details.group summary { position: relative; list-style: none; cursor: pointer; padding: 8px 10px; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "label count" "track track"; gap: 4px 8px; align-items: center; }
 details.group summary::-webkit-details-marker { display: none; }
 details.group summary .label { grid-area: label; font-weight: 600; }

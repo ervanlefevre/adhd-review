@@ -129,8 +129,8 @@ function renderProgress() {
   elements.groups.replaceChildren(
     ...state.groups.map((group) => {
       const done = group.viewedFiles === group.totalFiles;
-      const details = element("details", { className: `group ${done ? "done" : ""}`, dataset: { label: group.label } });
       const containsCurrent = group.files.some((file) => file.path === currentPath);
+      const details = element("details", { className: `group ${done ? "done" : ""} ${containsCurrent ? "active" : ""}`, dataset: { label: group.label } });
       details.open = firstRender ? !done || containsCurrent : openGroups.has(group.label) || containsCurrent;
       const summary = element("summary");
       summary.append(element("span", { className: "label", textContent: group.label }));
@@ -168,8 +168,21 @@ function renderProgress() {
       return details;
     })
   );
-  elements.groups.querySelector("li.current")?.scrollIntoView({ block: "nearest" });
+  revealCurrentFile(currentPath);
   celebrateCompletedGroups();
+}
+
+// When the file under review changes, its section comes to the top of the list so the
+// section header and the row are both visible; later renders only keep the row in view.
+let revealedPath = null;
+function revealCurrentFile(currentPath) {
+  const row = elements.groups.querySelector("li.current");
+  if (!row) return;
+  if (currentPath !== revealedPath) {
+    revealedPath = currentPath;
+    row.closest("details.group")?.scrollIntoView({ block: "start" });
+  }
+  row.scrollIntoView({ block: "nearest" });
 }
 
 // Groups that just reached 100% get a flash, a confetti burst and a toast. The first
