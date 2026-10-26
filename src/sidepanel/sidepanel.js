@@ -4,7 +4,7 @@ import { orderFiles, groupFiles, progress, isViewed, changedLines } from "../rev
 
 const elements = Object.fromEntries(
   [
-    "prLink", "prNumber", "refresh", "close", "notice", "percent", "counts", "overallFill", "groups", "addFileNote", "notes",
+    "prLink", "prNumber", "refresh", "settings", "close", "notice", "percent", "counts", "overallFill", "groups", "addFileNote", "notes",
     "commentsCount", "comments", "notesPreview", "laterCount", "later", "reviewBody", "submitResult",
   ].map((id) => [id, document.getElementById(id)])
 );
@@ -362,6 +362,7 @@ for (const button of submitButtons) {
 }
 
 elements.refresh.addEventListener("click", () => load({ force: true }));
+elements.settings.addEventListener("click", () => chrome.runtime.openOptionsPage());
 
 // Embedded in the page's sidebar: the close button asks the page to fold the sidebar.
 const embedded = new URLSearchParams(location.search).get("embedded") === "1";
