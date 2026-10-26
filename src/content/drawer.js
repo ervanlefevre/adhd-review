@@ -39,14 +39,7 @@ export class Drawer {
     important(this.frame, { display: "block", width: "100%", height: "100%", border: "0", margin: "0", padding: "0", background: "transparent" });
     this.loaded = new Promise((resolve) => this.frame.addEventListener("load", resolve, { once: true }));
 
-    const close = document.createElement("button");
-    close.type = "button";
-    close.className = "adhd-drawer-close";
-    close.title = "Close the panel";
-    close.textContent = "×";
-    important(close, { position: "absolute", top: "6px", right: "8px", "z-index": "1", width: "24px", height: "24px", padding: "0", margin: "0", cursor: "pointer" });
-    close.addEventListener("click", () => this.close());
-    this.root.append(close, this.frame);
+    this.root.append(this.frame);
 
     this.icon = document.createElement("button");
     this.icon.type = "button";
@@ -57,7 +50,7 @@ export class Drawer {
     important(this.icon, {
       position: "fixed",
       right: "14px",
-      bottom: "52px",
+      bottom: "76px",
       "z-index": String(Z_INDEX + 1),
       display: "flex",
       "align-items": "center",

@@ -32,6 +32,7 @@ class ReviewPage {
   }
 
   start() {
+    this.injectStylesheet();
     document.addEventListener("keydown", (event) => this.onKeyDown(event), true);
     document.addEventListener("change", (event) => this.onCheckboxChange(event), true);
     chrome.runtime.onMessage.addListener((message) => {
@@ -46,6 +47,20 @@ class ReviewPage {
     window.addEventListener("focus", () => this.drawer.setFocused(false));
     setInterval(() => this.checkUrl(), 500);
     this.checkUrl();
+  }
+
+  // The manifest also declares the stylesheet, but a copy appended last in <head> wins
+  // ties against GitHub's rules and is re-read on every page load.
+  async injectStylesheet() {
+    try {
+      const css = await (await fetch(chrome.runtime.getURL("src/content/sticky_bar.css"))).text();
+      const style = document.createElement("style");
+      style.id = "adhd-review-style";
+      style.textContent = css;
+      (document.head || document.documentElement).append(style);
+    } catch (error) {
+      console.warn("[adhd-review] stylesheet injection failed", error);
+    }
   }
 
   // GitHub navigates without reloading: watch the URL.
@@ -101,7 +116,21 @@ class ReviewPage {
     this.ordered = orderFiles(this.remote.files, rules, { lineCap: this.settings.lineCap });
     this.groups = groupFiles(this.ordered);
     this.knownPaths = new Set(this.ordered.map((file) => file.path));
+    this.celebrateCompletedGroups();
     this.render();
+  }
+
+  celebrateCompletedGroups() {
+    const done = new Set(this.groups.filter((group) => group.viewedFiles === group.totalFiles).map((group) => group.label));
+    if (this.doneGroups && this.doneGroupsKey === this.pr.prKey) {
+      const completed = [...done].filter((label) => !this.doneGroups.has(label));
+      if (completed.length > 0) {
+        this.bar.showMessage(`🎉 ${escapeHtml(completed.join(", "))} complete!`);
+        this.bar.pulse();
+      }
+    }
+    this.doneGroups = done;
+    this.doneGroupsKey = this.pr.prKey;
   }
 
   render() {
@@ -233,25 +262,36 @@ class ReviewPage {
     if (!this.fileAt(path)) return false;
     this.applyViewedLocally(path, viewed);
     const checkbox = this.pageCheckbox(path);
-    let appliedOnPage = false;
     if (checkbox) {
+      // GitHub confirms the tick only once its own request completes, which can take a
+      // while when several marks are in flight: click once, move on, verify later.
+      // A second click would untoggle it.
       if (checkbox.checked !== viewed) {
         checkbox.click();
-        if (!(await waitFor(() => checkbox.checked === viewed, 600, 50))) {
-          checkbox.closest("label")?.click();
-          await waitFor(() => checkbox.checked === viewed, 400, 50);
-        }
+        this.verifyTick(path, checkbox, viewed);
       }
-      appliedOnPage = checkbox.checked === viewed;
+      await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage: true });
+      return true;
     }
-    const response = await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage });
+    const response = await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage: false });
     if (!response.ok) {
       this.bar.showMessage(escapeHtml(response.error), { sticky: true });
       await this.load({ force: true });
       return false;
     }
-    if (!appliedOnPage && checkbox) this.bar.showMessage("GitHub's checkbox did not react; marked through the API instead");
     return true;
+  }
+
+  async verifyTick(path, checkbox, viewed) {
+    const current = () => (checkbox.isConnected ? checkbox : this.pageCheckbox(path));
+    const settled = await waitFor(() => current()?.checked === viewed, 5000, 150);
+    if (settled || !current()) return;
+    const response = await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage: false });
+    this.bar.showMessage(
+      response.ok
+        ? `GitHub's checkbox did not react for <code>${escapeHtml(path)}</code>; marked through the API (reload to see it ticked)`
+        : escapeHtml(response.error)
+    );
   }
 
   async actionViewed() {
@@ -366,8 +406,17 @@ class ReviewPage {
     return Object.keys(keys).find((name) => keys[name] === key) || null;
   }
 
+  // Actions run one at a time: a second key pressed while the first is still
+  // marking and scrolling must act on the file reached, not on the previous one.
   runAction(action) {
     this.bar.hideHelp();
+    this.queue = (this.queue || Promise.resolve())
+      .then(() => this.performAction(action))
+      .catch((error) => console.error("[adhd-review] action failed", action, error));
+    return this.queue;
+  }
+
+  performAction(action) {
     switch (action) {
       case "next":
         return this.goToNeighbour(1);
@@ -419,6 +468,9 @@ class ReviewPage {
         break;
       case "focusPage":
         this.focusPage();
+        break;
+      case "closePanel":
+        this.drawer.close();
         break;
       case "remoteStateChanged":
         if (message.prKey === this.pr.prKey) {

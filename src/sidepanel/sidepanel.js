@@ -4,7 +4,7 @@ import { orderFiles, groupFiles, progress, isViewed, changedLines } from "../rev
 
 const elements = Object.fromEntries(
   [
-    "prLink", "prNumber", "refresh", "notice", "percent", "counts", "overallFill", "groups", "addFileNote", "notes",
+    "prLink", "prNumber", "refresh", "close", "notice", "percent", "counts", "overallFill", "groups", "addFileNote", "notes",
     "commentsCount", "comments", "notesPreview", "laterCount", "later", "reviewBody", "submitResult",
   ].map((id) => [id, document.getElementById(id)])
 );
@@ -152,7 +152,7 @@ function renderProgress() {
       for (const file of group.files) {
         const viewed = isViewed(file);
         const item = element("li", { className: `${viewed ? "viewed" : ""} ${file.path === currentPath ? "current" : ""}`, title: file.path });
-        item.append(element("span", { className: "icon", textContent: viewed ? "✓" : "·" }));
+        item.append(element("span", { className: "icon", textContent: file.path === currentPath ? "▶" : viewed ? "✓" : "·" }));
         const shown = file.displayPath || file.path;
         const slash = shown.lastIndexOf("/");
         const name = element("span", { className: "name" });
@@ -169,6 +169,44 @@ function renderProgress() {
     })
   );
   elements.groups.querySelector("li.current")?.scrollIntoView({ block: "nearest" });
+  celebrateCompletedGroups();
+}
+
+// Groups that just reached 100% get a flash, a confetti burst and a toast. The first
+// render of a pull request only records what is already done.
+let doneGroups = null;
+let doneGroupsKey = null;
+function celebrateCompletedGroups() {
+  const done = new Set(state.groups.filter((group) => group.viewedFiles === group.totalFiles).map((group) => group.label));
+  if (doneGroups && doneGroupsKey === state.prKey) {
+    for (const label of done) if (!doneGroups.has(label)) celebrate(label);
+  }
+  doneGroups = done;
+  doneGroupsKey = state.prKey;
+}
+
+function celebrate(label) {
+  const details = [...elements.groups.querySelectorAll("details.group")].find((candidate) => candidate.dataset.label === label);
+  const summary = details?.querySelector("summary");
+  if (summary) {
+    details.classList.add("celebrate");
+    setTimeout(() => details.classList.remove("celebrate"), 1300);
+    const colors = ["#3fb950", "#58a6ff", "#d29922", "#f85149", "#a371f7"];
+    for (let index = 0; index < 18; index += 1) {
+      const piece = element("span", { className: "confetti" });
+      piece.style.left = `${10 + Math.random() * 80}%`;
+      piece.style.top = "50%";
+      piece.style.background = colors[index % colors.length];
+      piece.style.setProperty("--dx", `${(Math.random() - 0.5) * 120}px`);
+      piece.style.setProperty("--rot", `${(Math.random() - 0.5) * 720}deg`);
+      piece.style.animationDelay = `${Math.random() * 150}ms`;
+      summary.append(piece);
+      setTimeout(() => piece.remove(), 1600);
+    }
+  }
+  const toast = element("div", { className: "toast", textContent: `🎉 ${label} complete!` });
+  document.body.append(toast);
+  setTimeout(() => toast.remove(), 2500);
 }
 
 function countComments() {
@@ -324,6 +362,11 @@ for (const button of submitButtons) {
 }
 
 elements.refresh.addEventListener("click", () => load({ force: true }));
+
+// Embedded in the page's sidebar: the close button asks the page to fold the sidebar.
+const embedded = new URLSearchParams(location.search).get("embedded") === "1";
+elements.close.hidden = !embedded;
+elements.close.addEventListener("click", () => tellPage({ type: "closePanel" }));
 
 for (const tab of tabs) {
   tab.addEventListener("click", () => selectTab(tab.dataset.tab));

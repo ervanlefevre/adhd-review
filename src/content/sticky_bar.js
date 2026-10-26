@@ -5,17 +5,21 @@ export class StickyBar {
     this.root = document.createElement("div");
     this.root.id = "adhd-review-bar";
     this.root.innerHTML = `
-      <span class="adhd-group"></span>
-      <span class="adhd-path" title="Click to copy the path"><span></span></span>
-      <span class="adhd-flag" hidden></span>
-      <span class="adhd-message" hidden></span>
-      <span class="adhd-progress">
-        <span class="adhd-track"><span class="adhd-fill"></span></span>
-        <span class="adhd-pct"></span>
-        <span class="adhd-detail"></span>
-      </span>
-      <span class="adhd-keys"></span>
-      <button type="button" class="adhd-panel" title="Toggle the review panel">Panel</button>
+      <div class="adhd-row">
+        <span class="adhd-group"></span>
+        <span class="adhd-path" title="Click to copy the path"><span></span></span>
+        <span class="adhd-flag" hidden></span>
+      </div>
+      <div class="adhd-row">
+        <span class="adhd-progress">
+          <span class="adhd-track"><span class="adhd-fill"></span></span>
+          <span class="adhd-pct"></span>
+          <span class="adhd-detail"></span>
+        </span>
+        <span class="adhd-message" hidden></span>
+        <span class="adhd-keys"></span>
+        <button type="button" class="adhd-panel" title="Toggle the review panel">Panel</button>
+      </div>
     `;
     this.group = this.root.querySelector(".adhd-group");
     this.path = this.root.querySelector(".adhd-path span");
@@ -78,6 +82,13 @@ export class StickyBar {
       this.pct.textContent = `${progress.percent}%`;
       this.detail.textContent = `${progress.viewedFiles}/${progress.totalFiles} files · ~${formatNumber(progress.remainingLines)} lines left`;
     }
+  }
+
+  // Brief green pulse of the progress track (a group just got completed).
+  pulse() {
+    this.root.classList.remove("adhd-pulse");
+    void this.root.offsetWidth;
+    this.root.classList.add("adhd-pulse");
   }
 
   showMessage(html, { sticky = false } = {}) {

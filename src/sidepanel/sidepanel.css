@@ -71,7 +71,7 @@ section[hidden] { display: none; }
 .track.small { height: 5px; }
 
 details.group { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; background: var(--bg); }
-details.group summary { list-style: none; cursor: pointer; padding: 8px 10px; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "label count" "track track"; gap: 4px 8px; align-items: center; }
+details.group summary { position: relative; list-style: none; cursor: pointer; padding: 8px 10px; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "label count" "track track"; gap: 4px 8px; align-items: center; }
 details.group summary::-webkit-details-marker { display: none; }
 details.group summary .label { grid-area: label; font-weight: 600; }
 details.group summary .count { grid-area: count; color: var(--muted); font-variant-numeric: tabular-nums; display: flex; gap: 8px; align-items: center; }
@@ -80,7 +80,21 @@ details.group.done summary .label { color: var(--muted); }
 ul.files { list-style: none; margin: 0; padding: 0 0 6px; border-top: 1px solid var(--border); }
 ul.files li { display: flex; align-items: center; gap: 6px; padding: 3px 10px; cursor: pointer; }
 ul.files li:hover { background: var(--surface); }
-ul.files li.current { background: var(--accent-soft); }
+ul.files li.current { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
+ul.files li.current .icon { color: var(--accent); }
+details.group.celebrate summary { animation: group-celebrate 1.2s ease-out; }
+@keyframes group-celebrate {
+  0% { background: var(--success-soft); transform: scale(1); }
+  30% { transform: scale(1.02); }
+  100% { background: transparent; transform: scale(1); }
+}
+.confetti { position: absolute; width: 7px; height: 7px; border-radius: 2px; pointer-events: none; animation: confetti-fall 1.3s ease-out forwards; }
+@keyframes confetti-fall {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--dx), 90px) rotate(var(--rot)); opacity: 0; }
+}
+.toast { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5; padding: 8px 14px; border-radius: 999px; background: var(--success); color: #fff; font-weight: 600; box-shadow: 0 6px 18px #01040940; animation: toast-in 250ms ease-out; }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 ul.files li .icon { width: 16px; text-align: center; flex: 0 0 auto; }
 ul.files li .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 ul.files li .name .dir { color: var(--muted); }
