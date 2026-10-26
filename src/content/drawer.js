@@ -1,22 +1,50 @@
-// In-page drawer hosting the extension's panel page in an iframe. Unlike
-// chrome.sidePanel.open(), it needs no user-gesture plumbing, so a key press or a
-// click in the page always works. The iframe is an extension page and keeps full
-// access to the extension APIs.
+// Right sidebar hosting the extension's panel page in an iframe. It pushes the page
+// content (right margin on the document) instead of covering it, spans the window
+// height, and opens from a key, the floating icon, the bar's button or by moving the
+// mouse to the right edge of the window.
+//
+// Structural styles are set inline with !important: GitHub's stylesheets must not be
+// able to turn the sidebar into an in-flow box, whatever they declare for divs,
+// buttons or iframes. The stylesheet only provides colours.
+
+const WIDTH = 440;
+const Z_INDEX = 2147482999;
+const EDGE_WIDTH = 8;
+const EDGE_HOVER_DELAY_MS = 120;
 
 export class Drawer {
   constructor({ onToggle }) {
+    this.onToggle = onToggle;
+    this.width = WIDTH;
+
     this.root = document.createElement("div");
     this.root.id = "adhd-review-drawer";
-    this.root.hidden = true;
+    important(this.root, {
+      position: "fixed",
+      top: "0",
+      right: "0",
+      bottom: "0",
+      width: `${WIDTH}px`,
+      "max-width": "90vw",
+      "z-index": String(Z_INDEX),
+      display: "none",
+      margin: "0",
+      padding: "0",
+      "box-sizing": "border-box",
+    });
+
     this.frame = document.createElement("iframe");
     this.frame.src = chrome.runtime.getURL("src/sidepanel/sidepanel.html?embedded=1");
     this.frame.title = "ADHD Review panel";
+    important(this.frame, { display: "block", width: "100%", height: "100%", border: "0", margin: "0", padding: "0", background: "transparent" });
     this.loaded = new Promise((resolve) => this.frame.addEventListener("load", resolve, { once: true }));
+
     const close = document.createElement("button");
     close.type = "button";
     close.className = "adhd-drawer-close";
     close.title = "Close the panel";
     close.textContent = "×";
+    important(close, { position: "absolute", top: "6px", right: "8px", "z-index": "1", width: "24px", height: "24px", padding: "0", margin: "0", cursor: "pointer" });
     close.addEventListener("click", () => this.close());
     this.root.append(close, this.frame);
 
@@ -26,45 +54,99 @@ export class Drawer {
     this.icon.title = "ADHD Review panel (progress, notes, wrap-up)";
     this.icon.innerHTML =
       '<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M2 2.5A1.5 1.5 0 0 1 3.5 1h9A1.5 1.5 0 0 1 14 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5v-11ZM3.5 2a.5.5 0 0 0-.5.5v11a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-11a.5.5 0 0 0-.5-.5h-9ZM5 4.75A.75.75 0 0 1 5.75 4h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 4.75Zm0 3A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5A.75.75 0 0 1 5 10.75Z"/></svg>';
+    important(this.icon, {
+      position: "fixed",
+      right: "14px",
+      bottom: "52px",
+      "z-index": String(Z_INDEX + 1),
+      display: "flex",
+      "align-items": "center",
+      "justify-content": "center",
+      width: "38px",
+      height: "38px",
+      padding: "0",
+      margin: "0",
+      "border-radius": "999px",
+      cursor: "pointer",
+    });
     this.icon.addEventListener("click", () => this.toggle());
-    this.onToggle = onToggle;
+
+    // Invisible strip along the right edge: resting the mouse on it opens the sidebar.
+    this.edge = document.createElement("div");
+    this.edge.id = "adhd-review-edge";
+    this.edge.title = "Open the ADHD Review panel";
+    important(this.edge, {
+      position: "fixed",
+      top: "0",
+      right: "0",
+      bottom: "0",
+      width: `${EDGE_WIDTH}px`,
+      "z-index": String(Z_INDEX - 1),
+      cursor: "w-resize",
+      background: "transparent",
+    });
+    this.edgeTimer = null;
+    this.edge.addEventListener("mouseenter", () => {
+      clearTimeout(this.edgeTimer);
+      this.edgeTimer = setTimeout(() => this.open(), EDGE_HOVER_DELAY_MS);
+    });
+    this.edge.addEventListener("mouseleave", () => clearTimeout(this.edgeTimer));
   }
 
   mount() {
-    if (!this.root.isConnected) document.body.append(this.root);
-    if (!this.icon.isConnected) document.body.append(this.icon);
+    for (const element of [this.root, this.icon, this.edge]) {
+      if (!element.isConnected) document.body.append(element);
+    }
   }
 
   unmount() {
     this.root.remove();
     this.icon.remove();
-    document.documentElement.classList.remove("adhd-review-drawer-open");
+    this.edge.remove();
+    this.pushPage(false);
   }
 
   get isOpen() {
-    return this.root.isConnected && !this.root.hidden;
+    return this.root.isConnected && this.root.style.display !== "none";
   }
 
   async open() {
     this.mount();
-    this.root.hidden = false;
+    important(this.root, { display: "block" });
+    important(this.edge, { display: "none" });
     this.icon.classList.add("active");
-    document.documentElement.classList.add("adhd-review-drawer-open");
+    this.pushPage(true);
     this.remember(true);
-    this.onToggle?.(true);
+    this.onToggle?.(true, this.width);
     await this.loaded;
   }
 
   close() {
-    this.root.hidden = true;
+    important(this.root, { display: "none" });
+    important(this.edge, { display: "block" });
     this.icon.classList.remove("active");
-    document.documentElement.classList.remove("adhd-review-drawer-open");
+    this.pushPage(false);
     this.remember(false);
-    this.onToggle?.(false);
+    this.onToggle?.(false, 0);
   }
 
-  // The sidebar state is global (not per pull request): once opened it stays open on
-  // every pull request page until closed.
+  toggle() {
+    return this.isOpen ? this.close() : this.open();
+  }
+
+  pushPage(open) {
+    const html = document.documentElement;
+    if (open) {
+      html.style.setProperty("margin-right", `${this.width}px`, "important");
+      html.classList.add("adhd-review-drawer-open");
+    } else {
+      html.style.removeProperty("margin-right");
+      html.classList.remove("adhd-review-drawer-open");
+    }
+  }
+
+  // Global, not per pull request: once opened the sidebar stays open on every pull
+  // request page until closed.
   remember(open) {
     chrome.storage.local.set({ drawerOpen: open }).catch(() => {});
   }
@@ -74,14 +156,12 @@ export class Drawer {
     if (drawerOpen && !this.isOpen) await this.open();
   }
 
-  toggle() {
-    return this.isOpen ? this.close() : this.open();
-  }
-
-  // Messages to the embedded panel page go through the extension runtime, like for
-  // the native side panel; this is only a convenience wrapper.
   async send(message) {
     await this.loaded;
     return chrome.runtime.sendMessage(message).catch(() => {});
   }
+}
+
+function important(element, declarations) {
+  for (const [property, value] of Object.entries(declarations)) element.style.setProperty(property, value, "important");
 }

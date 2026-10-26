@@ -44,6 +44,12 @@ export class StickyBar {
     document.body.classList.remove("adhd-review-active");
   }
 
+  // Keeps the bar clear of the sidebar when it is open.
+  setRightOffset(pixels) {
+    this.root.style.setProperty("right", `${pixels}px`, "important");
+    if (this.help) this.help.style.setProperty("right", `${pixels + 16}px`, "important");
+  }
+
   setKeys(keys) {
     this.keys.innerHTML = `<kbd>${escapeHtml(keys.next)}</kbd>/<kbd>${escapeHtml(keys.previous)}</kbd> files · <kbd>${escapeHtml(keys.viewed)}</kbd> viewed · <kbd>${escapeHtml(keys.later)}</kbd> later · <kbd>${escapeHtml(keys.help)}</kbd> help`;
   }

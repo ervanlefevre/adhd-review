@@ -111,60 +111,19 @@ body.adhd-review-active { padding-bottom: 44px !important; }
 #adhd-review-help td { padding: 1px 0; vertical-align: top; }
 #adhd-review-help td:first-child { width: 48px; }
 
-:root { --adhd-drawer-width: 440px; }
-/* The sidebar pushes the page instead of covering it: the document gets a right margin
-   of the sidebar's width while it is open. */
-html.adhd-review-drawer-open { margin-right: var(--adhd-drawer-width) !important; }
-#adhd-review-drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 40px;
-  z-index: 2147482999;
-  width: var(--adhd-drawer-width);
-  max-width: 90vw;
-  background: #ffffff;
-  border-left: 1px solid #d0d7de;
-}
-@media (prefers-color-scheme: dark) {
-  #adhd-review-drawer { background: #0d1117; border-left-color: #30363d; }
-}
-#adhd-review-drawer[hidden] { display: none; }
-#adhd-review-drawer iframe { width: 100%; height: 100%; border: 0; display: block; }
+/* Sidebar, icon and edge strip: layout is set inline by drawer.js; only colours here. */
+#adhd-review-drawer { background: #ffffff; border-left: 1px solid #d0d7de; box-shadow: -8px 0 24px #01040926; }
 #adhd-review-drawer .adhd-drawer-close {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  z-index: 1;
-  width: 24px;
-  height: 24px;
-  padding: 0;
   border: 1px solid #d0d7de;
   border-radius: 6px;
   background: #f6f8fa;
   color: #1f2328;
   font: 16px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  cursor: pointer;
 }
 @media (prefers-color-scheme: dark) {
+  #adhd-review-drawer { background: #0d1117; border-left-color: #30363d; }
   #adhd-review-drawer .adhd-drawer-close { background: #161b22; border-color: #30363d; color: #e6edf3; }
 }
-#adhd-review-icon {
-  position: fixed;
-  right: 14px;
-  bottom: 52px;
-  z-index: 2147483000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  border: 1px solid #3d444d;
-  border-radius: 999px;
-  background: #1f2328;
-  color: #e6edf3;
-  box-shadow: 0 4px 12px #01040966;
-  cursor: pointer;
-}
+#adhd-review-icon { border: 1px solid #3d444d; background: #1f2328; color: #e6edf3; box-shadow: 0 4px 12px #01040966; }
 #adhd-review-icon:hover, #adhd-review-icon.active { background: #388bfd; border-color: #388bfd; color: #fff; }
+#adhd-review-edge:hover { background: #388bfd55 !important; }

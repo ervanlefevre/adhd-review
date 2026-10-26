@@ -14,7 +14,7 @@ const RENDER_TIMEOUT_MS = 4000;
 class ReviewPage {
   constructor() {
     this.bar = new StickyBar({ onOpenPanel: () => this.drawer.toggle(), onCopyPath: () => this.copyPath() });
-    this.drawer = new Drawer({});
+    this.drawer = new Drawer({ onToggle: (open, width) => this.bar.setRightOffset(open ? width : 0) });
     this.activeKey = null;
     this.pr = null;
     this.remote = null;
