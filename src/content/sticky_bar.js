@@ -55,7 +55,9 @@ export class StickyBar {
   }
 
   render({ group, position, path, viewed, later, progress }) {
-    this.group.textContent = group ? `${group}${position ? ` · ${position.index}/${position.total}` : ""}` : "ADHD Review";
+    this.group.textContent = group
+      ? `${group}${position ? ` · ${position.group.viewedFiles}/${position.group.totalFiles} viewed · #${position.index}` : ""}`
+      : "ADHD Review";
     if (path) {
       const slash = path.lastIndexOf("/");
       const dir = slash === -1 ? "" : path.slice(0, slash + 1);

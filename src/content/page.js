@@ -1,7 +1,7 @@
 import { loadSettings, loadToken, loadPrLocal, updatePrLocal, parsePrUrl, prStorageKey } from "../settings.js";
 import { parseRulesText } from "../rules.js";
 import { orderFiles, groupFiles, progress, neighbourFile, nextPendingFile, positionInGroup, isViewed } from "../review_model.js";
-import { findRenderedFiles, fileAtViewportLine, anchorIdFor, findFileLink, scrollToContainer, waitFor, isTypingTarget } from "./dom.js";
+import { findRenderedFiles, fileAtViewportLine, anchorIdFor, findFileLink, scrollToContainer, waitFor, isTypingTarget, isViewedCheckbox } from "./dom.js";
 import { StickyBar } from "./sticky_bar.js";
 import { Drawer } from "./drawer.js";
 
@@ -33,6 +33,7 @@ class ReviewPage {
 
   start() {
     document.addEventListener("keydown", (event) => this.onKeyDown(event), true);
+    document.addEventListener("change", (event) => this.onCheckboxChange(event), true);
     chrome.runtime.onMessage.addListener((message) => {
       this.onMessage(message);
     });
@@ -205,32 +206,56 @@ class ReviewPage {
 
   // ---- actions -----------------------------------------------------------
 
-  async setViewed(path, viewed) {
-    const file = this.fileAt(path);
-    if (!file) return false;
-    const entry = this.rendered.get(path);
-    let appliedOnPage = false;
-    if (entry?.checkbox) {
-      if (entry.checkbox.checked !== viewed) entry.checkbox.click();
-      appliedOnPage = true;
+  // GitHub's own checkbox is the source of truth whenever the file is on the page:
+  // clicking it updates GitHub's state and its counters instantly. The API is only
+  // used for files GitHub has not rendered.
+  pageCheckbox(path) {
+    let entry = this.rendered.get(path);
+    if (!entry?.checkbox?.isConnected) {
+      this.rendered = findRenderedFiles(this.knownPaths);
+      entry = this.rendered.get(path);
     }
-    file.viewerViewedState = viewed ? "VIEWED" : "UNVIEWED";
-    const remoteFile = this.remote.files.find((candidate) => candidate.path === path);
-    if (remoteFile) remoteFile.viewerViewedState = file.viewerViewedState;
+    return entry?.checkbox?.isConnected ? entry.checkbox : null;
+  }
+
+  applyViewedLocally(path, viewed) {
+    const state = viewed ? "VIEWED" : "UNVIEWED";
+    for (const file of [this.fileAt(path), this.remote.files.find((candidate) => candidate.path === path)]) {
+      if (file) file.viewerViewedState = state;
+    }
     this.compute();
+  }
+
+  async setViewed(path, viewed) {
+    if (!this.fileAt(path)) return false;
+    this.applyViewedLocally(path, viewed);
+    const checkbox = this.pageCheckbox(path);
+    let appliedOnPage = false;
+    if (checkbox) {
+      if (checkbox.checked !== viewed) {
+        checkbox.click();
+        if (!(await waitFor(() => checkbox.checked === viewed, 600, 50))) {
+          checkbox.closest("label")?.click();
+          await waitFor(() => checkbox.checked === viewed, 400, 50);
+        }
+      }
+      appliedOnPage = checkbox.checked === viewed;
+    }
     const response = await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage });
     if (!response.ok) {
       this.bar.showMessage(escapeHtml(response.error), { sticky: true });
       await this.load({ force: true });
       return false;
     }
+    if (!appliedOnPage && checkbox) this.bar.showMessage("GitHub's checkbox did not react; marked through the API instead");
     return true;
   }
 
   async actionViewed() {
     const file = this.fileAt(this.currentPath);
     if (!file) return this.goToNextPending();
-    if (isViewed(file)) {
+    const checkbox = this.pageCheckbox(file.path);
+    if (isViewed(file) && (!checkbox || checkbox.checked)) {
       this.bar.showMessage("Already viewed, moving on");
       return this.goToNextPending();
     }
@@ -240,11 +265,24 @@ class ReviewPage {
   async actionUnview() {
     const file = this.fileAt(this.currentPath);
     if (!file) return;
-    if (!isViewed(file)) {
+    const checkbox = this.pageCheckbox(file.path);
+    if (!isViewed(file) && (!checkbox || !checkbox.checked)) {
       this.bar.showMessage("Not viewed yet");
       return;
     }
     if (await this.setViewed(file.path, false)) this.bar.showMessage("Unmarked as viewed");
+  }
+
+  // The user may tick GitHub's checkbox with the mouse: keep the state in sync.
+  onCheckboxChange(event) {
+    const input = event.target;
+    if (!this.remote || !(input instanceof HTMLInputElement) || !isViewedCheckbox(input)) return;
+    const path = [...this.rendered].find(([, entry]) => entry.checkbox === input)?.[0];
+    if (!path) return;
+    const file = this.fileAt(path);
+    if (!file || isViewed(file) === input.checked) return;
+    this.applyViewedLocally(path, input.checked);
+    this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed: input.checked, appliedOnPage: true });
   }
 
   async actionLater() {
