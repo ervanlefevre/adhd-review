@@ -38,6 +38,7 @@ export class Drawer {
   unmount() {
     this.root.remove();
     this.icon.remove();
+    document.documentElement.classList.remove("adhd-review-drawer-open");
   }
 
   get isOpen() {
@@ -48,6 +49,8 @@ export class Drawer {
     this.mount();
     this.root.hidden = false;
     this.icon.classList.add("active");
+    document.documentElement.classList.add("adhd-review-drawer-open");
+    this.remember(true);
     this.onToggle?.(true);
     await this.loaded;
   }
@@ -55,7 +58,20 @@ export class Drawer {
   close() {
     this.root.hidden = true;
     this.icon.classList.remove("active");
+    document.documentElement.classList.remove("adhd-review-drawer-open");
+    this.remember(false);
     this.onToggle?.(false);
+  }
+
+  // The sidebar state is global (not per pull request): once opened it stays open on
+  // every pull request page until closed.
+  remember(open) {
+    chrome.storage.local.set({ drawerOpen: open }).catch(() => {});
+  }
+
+  async restore() {
+    const { drawerOpen } = await chrome.storage.local.get("drawerOpen");
+    if (drawerOpen && !this.isOpen) await this.open();
   }
 
   toggle() {

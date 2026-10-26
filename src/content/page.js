@@ -66,6 +66,7 @@ class ReviewPage {
   async load({ force = false } = {}) {
     this.bar.mount();
     this.drawer.mount();
+    this.drawer.restore();
     this.settings = await loadSettings();
     this.bar.setKeys(this.settings.keys);
     this.bar.render({ progress: null });
