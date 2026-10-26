@@ -6,19 +6,23 @@ export class StickyBar {
     this.root.id = "adhd-review-bar";
     // Layout set inline with !important, like the sidebar: GitHub's stylesheets must
     // not be able to move the bar; the stylesheet only provides the look.
+    // The bar lives in the browser's top layer (Popover API): a top-layer element is
+    // positioned against the viewport whatever the page does to its ancestors, and
+    // nothing on the page stacks above it. The inline values undo the popover UA style.
+    this.root.setAttribute("popover", "manual");
     for (const [property, value] of Object.entries({
       position: "fixed",
-      left: "0",
-      right: "0",
-      bottom: "0",
-      top: "auto",
-      "z-index": "2147483000",
+      inset: "auto 0 0 0",
+      width: "auto",
+      height: "auto",
+      "max-height": "50vh",
+      margin: "0",
+      border: "0",
+      overflow: "visible",
       display: "flex",
       "flex-direction": "column",
       "align-items": "stretch",
-      margin: "0",
       transform: "none",
-      "max-height": "50vh",
     })) {
       this.root.style.setProperty(property, value, "important");
     }
@@ -61,13 +65,19 @@ export class StickyBar {
     // Appended to <html>, not <body>: a transform, filter or containment on the body
     // would turn it into the containing block of a fixed element.
     if (!this.root.isConnected) document.documentElement.append(this.root);
+    try {
+      if (!this.root.matches(":popover-open")) this.root.showPopover();
+    } catch (error) {
+      console.warn("[adhd-review] popover unavailable, falling back to a fixed bar", error);
+      this.root.removeAttribute("popover");
+    }
     document.documentElement.classList.add("adhd-review-active");
     document.body.classList.add("adhd-review-active");
     setTimeout(() => this.selfCheck(), 500);
   }
 
   selfCheck() {
-    if (!this.root.isConnected) return;
+    if (!this.root.isConnected || window.innerHeight === 0) return;
     const rect = this.root.getBoundingClientRect();
     if (Math.abs(rect.bottom - window.innerHeight) > 2 || rect.top < 0) {
       const computed = getComputedStyle(this.root);
