@@ -23,7 +23,8 @@ The token is stored in `chrome.storage.local` of this profile only and is sent t
 | Key | Action |
 |---|---|
 | `j` / `k` | next / previous file in review order |
-| `v` | mark viewed and go to the next pending file (unmark when already viewed) |
+| `v` | mark viewed and go to the next pending file |
+| `u` | unmark viewed (stays on the file) |
 | `l` | flag for later and move on (again to unflag) |
 | `n` | next file neither viewed nor flagged |
 | `G` | mark every remaining file of the current group as viewed |

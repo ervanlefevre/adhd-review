@@ -4,7 +4,8 @@ import { parseRulesText } from "../rules.js";
 const KEY_LABELS = {
   next: "Next file",
   previous: "Previous file",
-  viewed: "Mark viewed / unmark",
+  viewed: "Mark viewed",
+  unview: "Unmark viewed",
   later: "Flag for later",
   nextPending: "Next pending file",
   markGroup: "Mark whole group viewed",

@@ -6,6 +6,11 @@
 // path from being mistaken for a header (they have no checkbox near them).
 
 const MAX_ANCESTOR_DEPTH = 10;
+// A file header keeps its checkbox close: when the only checkbox of a candidate
+// container is deeper than this, the container is a page layout, not a header.
+const MAX_CHECKBOX_DEPTH = 8;
+// Path texts inside these never belong to a file header (file tree, sidebars).
+const EXCLUDED_ANCESTORS = '[role="tree"], [role="treeitem"], nav, aside, [role="navigation"]';
 
 // Fast path for GitHub's classic page, which exposes the path as a data attribute.
 const DATA_PATH_SELECTOR = "[data-path], [data-file-path]";
@@ -31,6 +36,7 @@ export function findRenderedFiles(knownPaths) {
 
   const register = (path, element) => {
     if (!knownPaths.has(path) || rendered.has(path)) return;
+    if (element.closest(EXCLUDED_ANCESTORS)) return;
     const found = containerWithOneCheckbox(element, checkboxes);
     if (found) rendered.set(path, { ...found, title: element });
   };
@@ -66,11 +72,19 @@ function containerWithOneCheckbox(element, checkboxes) {
   let ancestor = element;
   for (let depth = 0; ancestor && depth < MAX_ANCESTOR_DEPTH; depth += 1) {
     const contained = checkboxes.filter((checkbox) => ancestor.contains(checkbox));
-    if (contained.length === 1) return { container: ancestor, checkbox: contained[0] };
+    if (contained.length === 1) {
+      return depthBetween(contained[0], ancestor) <= MAX_CHECKBOX_DEPTH ? { container: ancestor, checkbox: contained[0] } : null;
+    }
     if (contained.length > 1) return null;
     ancestor = ancestor.parentElement;
   }
   return null;
+}
+
+function depthBetween(descendant, ancestor) {
+  let depth = 0;
+  for (let node = descendant; node && node !== ancestor; node = node.parentElement) depth += 1;
+  return depth;
 }
 
 // The rendered file whose block crosses the horizontal line at `threshold` px from the

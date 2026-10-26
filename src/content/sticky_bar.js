@@ -85,7 +85,8 @@ export class StickyBar {
     const rows = [
       [keys.next, "next file in review order"],
       [keys.previous, "previous file"],
-      [keys.viewed, "mark viewed and go to the next pending file (unmark if viewed)"],
+      [keys.viewed, "mark viewed and go to the next pending file"],
+      [keys.unview, "unmark viewed (stays on the file)"],
       [keys.later, "flag for later and move on (press again to unflag)"],
       [keys.nextPending, "next file neither viewed nor flagged"],
       [keys.markGroup, "mark the whole current group as viewed"],

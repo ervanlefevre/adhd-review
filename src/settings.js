@@ -5,6 +5,7 @@ export const DEFAULT_KEYS = {
   next: "j",
   previous: "k",
   viewed: "v",
+  unview: "u",
   later: "l",
   nextPending: "n",
   markGroup: "G",

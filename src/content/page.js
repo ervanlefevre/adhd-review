@@ -230,11 +230,20 @@ class ReviewPage {
     const file = this.fileAt(this.currentPath);
     if (!file) return this.goToNextPending();
     if (isViewed(file)) {
-      await this.setViewed(file.path, false);
-      this.bar.showMessage("Unmarked as viewed");
-      return;
+      this.bar.showMessage("Already viewed, moving on");
+      return this.goToNextPending();
     }
     if (await this.setViewed(file.path, true)) await this.goToNextPending();
+  }
+
+  async actionUnview() {
+    const file = this.fileAt(this.currentPath);
+    if (!file) return;
+    if (!isViewed(file)) {
+      this.bar.showMessage("Not viewed yet");
+      return;
+    }
+    if (await this.setViewed(file.path, false)) this.bar.showMessage("Unmarked as viewed");
   }
 
   async actionLater() {
@@ -309,6 +318,8 @@ class ReviewPage {
         return this.goToNeighbour(-1);
       case "viewed":
         return this.actionViewed();
+      case "unview":
+        return this.actionUnview();
       case "later":
         return this.actionLater();
       case "nextPending":
