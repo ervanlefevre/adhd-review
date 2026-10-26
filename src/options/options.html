@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ADHD Review options</title>
+  <link rel="stylesheet" href="../sidepanel/sidepanel.css">
+  <style>
+    body { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+    form > section { margin-bottom: 28px; }
+    label { display: block; font-weight: 600; margin: 12px 0 4px; }
+    input[type="password"], input[type="number"], input[type="text"], textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; min-height: 240px; }
+    .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; }
+    .keys label { margin: 0; font-weight: 500; }
+    .keys input { width: 100%; }
+    .hint { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+    .status { margin-left: 12px; font-size: 13px; }
+    .status.ok { color: var(--success); }
+    .status.error { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <h1>ADHD Review</h1>
+  <form id="form">
+    <section>
+      <h2>GitHub token</h2>
+      <label for="token">Personal access token</label>
+      <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="ghp_… or github_pat_…">
+      <p class="hint">Classic token with the <code>repo</code> scope. If your organization enforces SAML SSO, authorize the token for it (token settings → Configure SSO). Stored only in this browser profile.</p>
+      <button type="button" id="test" class="secondary">Test connection</button>
+      <span id="connection" class="status"></span>
+    </section>
+
+    <section>
+      <h2>Review order and groups</h2>
+      <label for="rules">One rule per line: <code>Label | regex | weight</code></label>
+      <textarea id="rules" spellcheck="false"></textarea>
+      <p class="hint">A file belongs to the first rule it matches; rules order is the review order. Weight scales the file's contribution to progress (default 1). Unmatched files end up in "Other".</p>
+      <span id="rulesStatus" class="status"></span>
+    </section>
+
+    <section>
+      <h2>Progress</h2>
+      <label for="lineCap">Line cap per file</label>
+      <input id="lineCap" type="number" min="1" step="1">
+      <p class="hint">A file counts at most this many changed lines, so one generated file does not dominate the bar.</p>
+      <label for="scrollOffset">Scroll offset (px)</label>
+      <input id="scrollOffset" type="number" step="1">
+      <p class="hint">Extra space kept above a file when jumping to it (use it if GitHub's sticky toolbar hides the top of the diff).</p>
+    </section>
+
+    <section>
+      <h2>Keyboard</h2>
+      <div class="keys" id="keys"></div>
+      <p class="hint">Single characters; shift is part of the key (G ≠ g). Keys are ignored while typing in a field.</p>
+    </section>
+
+    <button type="submit" class="primary">Save</button>
+    <span id="saveStatus" class="status"></span>
+  </form>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ADHD Review</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="panel-header">
+    <div class="title">
+      <a id="prLink" href="#" target="_blank" title="">ADHD Review</a>
+      <span id="prNumber" class="muted"></span>
+      <button id="refresh" class="small" title="Refresh from GitHub">↻</button>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="progress" aria-selected="true">Progress</button>
+      <button role="tab" data-tab="notes" aria-selected="false">Notes</button>
+      <button role="tab" data-tab="wrapup" aria-selected="false">Wrap-up</button>
+    </nav>
+  </header>
+  <main>
+    <div id="notice" class="notice" hidden></div>
+    <section id="tab-progress">
+      <div class="overall">
+        <div class="numbers"><strong id="percent">–</strong><span id="counts" class="muted"></span></div>
+        <div class="track"><div id="overallFill" class="fill" style="width: 0%"></div></div>
+      </div>
+      <div id="groups"></div>
+    </section>
+    <section id="tab-notes" hidden>
+      <div class="toolbar">
+        <button id="addFileNote" class="small">+ current file</button>
+        <span class="muted">Scratch memory for this pull request, kept in this browser.</span>
+      </div>
+      <textarea id="notes" placeholder="- app/models/foo.rb: double-check the validation on …"></textarea>
+    </section>
+    <section id="tab-wrapup" hidden>
+      <h2>Pending comments <span id="commentsCount" class="muted"></span></h2>
+      <div id="comments"></div>
+      <h2>Notes</h2>
+      <pre id="notesPreview" class="notes"></pre>
+      <h2>Flagged for later <span id="laterCount" class="muted"></span></h2>
+      <ul id="later" class="later"></ul>
+      <h2>Global comment</h2>
+      <textarea id="reviewBody" placeholder="Summary for the author…"></textarea>
+      <div class="submit-row">
+        <button id="submitComment" class="primary" data-event="COMMENT">Comment</button>
+        <button id="submitApprove" data-event="APPROVE">Approve</button>
+        <button id="submitRequestChanges" class="danger" data-event="REQUEST_CHANGES">Request changes</button>
+      </div>
+      <div id="submitResult" class="result"></div>
+    </section>
+  </main>
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

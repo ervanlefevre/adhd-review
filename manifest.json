@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "ADHD Review",
+  "version": "0.1.0",
+  "description": "Pace large GitHub pull request reviews: review order by domain, keyboard navigation, lines-weighted progress, notes and a wrap-up step.",
+  "permissions": ["storage", "sidePanel", "tabs"],
+  "host_permissions": ["https://github.com/*", "https://api.github.com/*"],
+  "background": { "service_worker": "src/background.js", "type": "module" },
+  "options_page": "src/options/options.html",
+  "side_panel": { "default_path": "src/sidepanel/sidepanel.html" },
+  "action": { "default_title": "ADHD Review: open the review panel" },
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*/*/pull/*"],
+      "js": ["src/content/content.js"],
+      "css": ["src/content/sticky_bar.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["src/*"], "matches": ["https://github.com/*"] }
+  ]
+}

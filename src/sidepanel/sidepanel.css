@@ -1,0 +1,107 @@
+:root {
+  --bg: #ffffff;
+  --surface: #f6f8fa;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --muted: #656d76;
+  --accent: #0969da;
+  --accent-soft: #ddf4ff;
+  --success: #1a7f37;
+  --success-soft: #dafbe1;
+  --warning: #9a6700;
+  --warning-soft: #fff8c5;
+  --danger: #cf222e;
+  --track: #d0d7de;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-soft: #388bfd26;
+    --success: #3fb950;
+    --success-soft: #23863626;
+    --warning: #d29922;
+    --warning-soft: #9e6a0326;
+    --danger: #f85149;
+    --track: #30363d;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+h1 { font-size: 18px; margin: 0 0 16px; }
+h2 { font-size: 14px; margin: 0 0 8px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+a { color: var(--accent); }
+button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 5px 10px; }
+button:hover { border-color: var(--muted); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary { background: var(--success); border-color: var(--success); color: #fff; }
+button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+button.link { border: none; background: none; color: var(--accent); padding: 0; }
+button.small { padding: 2px 8px; font-size: 12px; }
+
+header.panel-header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--border); padding: 10px 12px 0; }
+header .title { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+header .title a { font-weight: 600; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+header .title .muted { white-space: nowrap; }
+nav.tabs { display: flex; gap: 2px; }
+nav.tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 6px 10px; color: var(--muted); }
+nav.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+main { padding: 12px; }
+section[hidden] { display: none; }
+.muted { color: var(--muted); }
+.empty { color: var(--muted); padding: 12px 0; }
+.error { color: var(--danger); }
+.notice { padding: 8px 10px; border-radius: 6px; background: var(--warning-soft); color: var(--warning); margin-bottom: 12px; }
+
+.overall { margin-bottom: 14px; }
+.overall .numbers { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.overall .numbers strong { font-size: 20px; }
+.track { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.track .fill { height: 100%; background: var(--success); transition: width 200ms; }
+.track.small { height: 5px; }
+
+details.group { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; background: var(--bg); }
+details.group summary { list-style: none; cursor: pointer; padding: 8px 10px; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "label count" "track track"; gap: 4px 8px; align-items: center; }
+details.group summary::-webkit-details-marker { display: none; }
+details.group summary .label { grid-area: label; font-weight: 600; }
+details.group summary .count { grid-area: count; color: var(--muted); font-variant-numeric: tabular-nums; display: flex; gap: 8px; align-items: center; }
+details.group summary .track { grid-area: track; }
+details.group.done summary .label { color: var(--muted); }
+ul.files { list-style: none; margin: 0; padding: 0 0 6px; border-top: 1px solid var(--border); }
+ul.files li { display: flex; align-items: center; gap: 6px; padding: 3px 10px; cursor: pointer; }
+ul.files li:hover { background: var(--surface); }
+ul.files li.current { background: var(--accent-soft); }
+ul.files li .icon { width: 16px; text-align: center; flex: 0 0 auto; }
+ul.files li .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+ul.files li .name .dir { color: var(--muted); }
+ul.files li.viewed .name { color: var(--muted); }
+ul.files li .lines { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+ul.files li .badge { font-size: 11px; padding: 0 5px; border-radius: 999px; flex: 0 0 auto; }
+.badge.later { background: var(--warning-soft); color: var(--warning); }
+.badge.comments { background: var(--accent-soft); color: var(--accent); }
+
+textarea { width: 100%; min-height: 220px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); resize: vertical; }
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.toolbar .spacer { flex: 1; }
+
+.comment { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+.comment .where { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; margin-bottom: 4px; }
+.comment .where button { font-family: inherit; font-size: inherit; text-align: left; }
+.comment .body { white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow: auto; }
+.comment.outdated .where::after { content: " outdated"; color: var(--warning); font-family: inherit; }
+pre.notes { white-space: pre-wrap; word-break: break-word; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 0 0 12px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+ul.later { list-style: none; margin: 0 0 12px; padding: 0; }
+ul.later li { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+ul.later li .name { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.submit-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.result { margin-top: 10px; }

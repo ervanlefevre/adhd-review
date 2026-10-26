@@ -1,0 +1,10 @@
+{
+  "name": "adhd-review",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension that paces large GitHub pull request reviews",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}
