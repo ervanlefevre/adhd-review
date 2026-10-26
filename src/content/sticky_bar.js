@@ -4,6 +4,24 @@ export class StickyBar {
   constructor({ onOpenPanel, onCopyPath }) {
     this.root = document.createElement("div");
     this.root.id = "adhd-review-bar";
+    // Layout set inline with !important, like the sidebar: GitHub's stylesheets must
+    // not be able to move the bar; the stylesheet only provides the look.
+    for (const [property, value] of Object.entries({
+      position: "fixed",
+      left: "0",
+      right: "0",
+      bottom: "0",
+      top: "auto",
+      "z-index": "2147483000",
+      display: "flex",
+      "flex-direction": "column",
+      "align-items": "stretch",
+      margin: "0",
+      transform: "none",
+      "max-height": "50vh",
+    })) {
+      this.root.style.setProperty(property, value, "important");
+    }
     this.root.innerHTML = `
       <div class="adhd-row">
         <span class="adhd-group"></span>
@@ -40,9 +58,30 @@ export class StickyBar {
   }
 
   mount() {
-    if (!this.root.isConnected) document.body.append(this.root);
+    // Appended to <html>, not <body>: a transform, filter or containment on the body
+    // would turn it into the containing block of a fixed element.
+    if (!this.root.isConnected) document.documentElement.append(this.root);
     document.documentElement.classList.add("adhd-review-active");
     document.body.classList.add("adhd-review-active");
+    setTimeout(() => this.selfCheck(), 500);
+  }
+
+  selfCheck() {
+    if (!this.root.isConnected) return;
+    const rect = this.root.getBoundingClientRect();
+    if (Math.abs(rect.bottom - window.innerHeight) > 2 || rect.top < 0) {
+      const computed = getComputedStyle(this.root);
+      console.warn("[adhd-review] bar off-screen", {
+        rect: { top: rect.top, bottom: rect.bottom, height: rect.height },
+        innerHeight: window.innerHeight,
+        position: computed.position,
+        bottom: computed.bottom,
+        transform: computed.transform,
+        parent: this.root.parentElement?.tagName,
+        htmlTransform: getComputedStyle(document.documentElement).transform,
+        bodyTransform: getComputedStyle(document.body).transform,
+      });
+    }
   }
 
   unmount() {
