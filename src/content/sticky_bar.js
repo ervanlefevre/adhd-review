@@ -15,7 +15,7 @@ export class StickyBar {
         <span class="adhd-detail"></span>
       </span>
       <span class="adhd-keys"></span>
-      <button type="button" class="adhd-panel">Panel</button>
+      <button type="button" class="adhd-panel" title="Toggle the review panel">Panel</button>
     `;
     this.group = this.root.querySelector(".adhd-group");
     this.path = this.root.querySelector(".adhd-path span");
@@ -89,7 +89,7 @@ export class StickyBar {
       [keys.later, "flag for later and move on (press again to unflag)"],
       [keys.nextPending, "next file neither viewed nor flagged"],
       [keys.markGroup, "mark the whole current group as viewed"],
-      [keys.panel, "open the side panel (progress, notes, wrap-up)"],
+      [keys.panel, "toggle the review panel (progress, notes, wrap-up)"],
       ["alt+n", "add a note for the current file"],
       [keys.refresh, "refresh from GitHub"],
       [keys.help, "toggle this help"],

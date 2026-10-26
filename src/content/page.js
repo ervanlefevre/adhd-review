@@ -3,6 +3,7 @@ import { parseRulesText } from "../rules.js";
 import { orderFiles, groupFiles, progress, neighbourFile, nextPendingFile, positionInGroup, isViewed } from "../review_model.js";
 import { findRenderedFiles, fileAtViewportLine, anchorIdFor, findFileLink, scrollToContainer, waitFor, isTypingTarget } from "./dom.js";
 import { StickyBar } from "./sticky_bar.js";
+import { Drawer } from "./drawer.js";
 
 const FILES_TABS = new Set(["files", "changes"]);
 // Horizontal line (px from the top of the viewport) that decides which file is "current":
@@ -12,7 +13,8 @@ const RENDER_TIMEOUT_MS = 4000;
 
 class ReviewPage {
   constructor() {
-    this.bar = new StickyBar({ onOpenPanel: () => this.openPanel(), onCopyPath: () => this.copyPath() });
+    this.bar = new StickyBar({ onOpenPanel: () => this.drawer.toggle(), onCopyPath: () => this.copyPath() });
+    this.drawer = new Drawer({});
     this.activeKey = null;
     this.pr = null;
     this.remote = null;
@@ -51,6 +53,7 @@ class ReviewPage {
     this.activeKey = key;
     if (!active) {
       this.bar.unmount();
+      this.drawer.unmount();
       this.pr = null;
       this.remote = null;
       return;
@@ -62,6 +65,7 @@ class ReviewPage {
 
   async load({ force = false } = {}) {
     this.bar.mount();
+    this.drawer.mount();
     this.settings = await loadSettings();
     this.bar.setKeys(this.settings.keys);
     this.bar.render({ progress: null });
@@ -266,13 +270,15 @@ class ReviewPage {
     if (!path) return;
     const notes = (this.local.notes || "").replace(/\s+$/, "");
     this.local = await updatePrLocal(this.pr.prKey, { notes: `${notes}${notes ? "\n" : ""}- ${path}: ` });
-    await this.openPanel();
-    setTimeout(() => chrome.runtime.sendMessage({ type: "focusNotes", prKey: this.pr.prKey }).catch(() => {}), 300);
+    await this.drawer.open();
+    setTimeout(() => this.drawer.send({ type: "focusNotes", prKey: this.pr.prKey }), 150);
   }
 
-  async openPanel() {
-    const response = await this.send({ type: "openSidePanel" });
-    if (!response.ok) this.bar.showMessage("Chrome refused to open the panel from here: click the extension icon in the toolbar.");
+  // The native Chrome side panel opens from the toolbar icon; from the page, the
+  // in-page drawer is used because chrome.sidePanel.open() needs a user gesture in the
+  // extension's own context and a relayed key press does not reliably qualify.
+  openPanel() {
+    return this.drawer.toggle();
   }
 
   async copyPath() {
