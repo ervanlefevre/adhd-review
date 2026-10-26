@@ -1,15 +1,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseRulesText, defaultRules, OTHER_GROUP_LABEL } from "../src/rules.js";
+import { parseRulesText, defaultRules, DEFAULT_RULES_TEXT, OTHER_GROUP_LABEL } from "../src/rules.js";
 import { orderFiles, groupFiles, progress, neighbourFile, nextPendingFile, positionInGroup } from "../src/review_model.js";
 
 const file = (path, additions = 10, deletions = 0, viewerViewedState = "UNVIEWED") => ({ path, additions, deletions, viewerViewedState });
 
 test("parseRulesText reads label, regex and optional weight, and reports bad lines", () => {
-  const { rules, errors } = parseRulesText("Models | ^app/models/\nLocales | ^config/locales/ | 0.1\n\n# comment\nbroken line\nBad | (unclosed");
+  const { rules, errors } = parseRulesText("Models | ^app/models/\nLocales | ^config/locales/(fr|en-gb)/ | 0.1\n\n# comment\nbroken line\nBad | (unclosed");
   assert.equal(rules.length, 2);
+  assert.ok(rules[1].pattern.test("config/locales/en-gb/x.yml"));
+  assert.ok(!rules[1].pattern.test("config/locales/de-de/x.yml"));
   assert.equal(rules[1].weight, 0.1);
   assert.equal(errors.length, 2);
+});
+
+test("the default rules parse without error", () => {
+  const { rules, errors } = parseRulesText(DEFAULT_RULES_TEXT);
+  assert.deepEqual(errors, []);
+  assert.equal(rules.length, 11);
+  assert.equal(rules.find((rule) => rule.label === "Locales (auto-translated)").weight, 0.1);
 });
 
 test("orderFiles follows the rule order, then the path, and sends unmatched files to Other", () => {

@@ -22,12 +22,24 @@ export function parseRulesText(text) {
   text.split("\n").forEach((rawLine, index) => {
     const line = rawLine.trim();
     if (line === "" || line.startsWith("#")) return;
-    const parts = line.split("|").map((part) => part.trim());
-    if (parts.length < 2) {
+    // The regex itself may contain "|" (alternation): the label is everything before
+    // the first "|", the weight is the last segment only when it is a number.
+    const firstSeparator = line.indexOf("|");
+    if (firstSeparator === -1) {
       errors.push(`line ${index + 1}: expected "Label | regex | weight"`);
       return;
     }
-    const [label, source, weightText] = parts;
+    const label = line.slice(0, firstSeparator).trim();
+    let source = line.slice(firstSeparator + 1).trim();
+    let weightText;
+    const lastSeparator = source.lastIndexOf("|");
+    if (lastSeparator !== -1) {
+      const tail = source.slice(lastSeparator + 1).trim();
+      if (tail !== "" && !Number.isNaN(Number(tail))) {
+        weightText = tail;
+        source = source.slice(0, lastSeparator).trim();
+      }
+    }
     let pattern;
     try {
       pattern = new RegExp(source);
