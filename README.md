@@ -11,10 +11,11 @@ All data (file list, line counts, viewed state, pending review) comes from the G
 
 ## Install (unpacked)
 
-1. `chrome://extensions` → enable **Developer mode** → **Load unpacked** → pick this folder.
-2. Create a GitHub token: **Settings → Developer settings → Personal access tokens → Tokens (classic)**, scope `repo`. If the organization enforces SAML SSO, use **Configure SSO → Authorize** on the token.
-3. Open the extension options (right-click the toolbar icon → Options), paste the token, **Test connection**, **Save**.
-4. Open a pull request's **Files changed** tab. The bar appears at the bottom with a round panel icon above it; press `?` for the keys.
+1. Get the files: either clone this repository, or download `adhd-review-<version>.zip` from the [releases page](../../releases) and unzip it.
+2. `chrome://extensions` → enable **Developer mode** → **Load unpacked** → pick the folder.
+3. Create a GitHub token: **Settings → Developer settings → Personal access tokens → Tokens (classic)**, scope `repo`. If the organization enforces SAML SSO, use **Configure SSO → Authorize** on the token.
+4. Open the extension options (right-click the toolbar icon → Options), paste the token, **Test connection**, **Save**.
+5. Open a pull request's **Files changed** tab. The bar appears at the bottom with a round panel icon above it; press `?` for the keys.
 
 The token is stored in `chrome.storage.local` of this profile only and is sent to `api.github.com` only.
 
@@ -42,6 +43,7 @@ Rules live in the options, one per line: `Label | regex | weight`. A file belong
 ## Development
 
 - No build step: plain ES modules. `src/content/content.js` is the classic content script that imports `src/content/page.js` as a module.
+- `npm run package` builds the shareable zip in `dist/` (`bin/package poc` adds a suffix).
 - `npm test` runs the pure model tests (`src/review_model.js`, `src/rules.js`) with `node --test`.
 - GitHub's new "Files changed" page is a React application with generated class names. `src/content/dom.js` therefore locates file blocks from two stable facts, a checkbox labelled "Viewed" and the file path as text, with a fast path on `data-path` for the classic page. Anchors use GitHub's `#diff-<sha256(path)>` convention.
 - After editing, reload the extension in `chrome://extensions` and reload the pull request page.

@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Chrome extension that paces large GitHub pull request reviews",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "package": "bin/package"
   }
 }
