@@ -9,7 +9,9 @@ const FILES_TABS = new Set(["files", "changes"]);
 // Horizontal line (px from the top of the viewport) that decides which file is "current":
 // below GitHub's sticky toolbar and sticky file header.
 const CURRENT_FILE_LINE = 160;
-const RENDER_TIMEOUT_MS = 4000;
+const RENDER_TIMEOUT_MS = 3000;
+// After a programmatic scroll, scroll events must not re-detect the current file.
+const DETECT_PAUSE_MS = 600;
 
 class ReviewPage {
   constructor() {
@@ -41,7 +43,10 @@ class ReviewPage {
     chrome.storage.onChanged.addListener((changes, area) => this.onStorageChanged(changes, area));
     // Mutations inside our own bar, help and sidebar never change GitHub's file blocks.
     new MutationObserver((mutations) => {
-      if (mutations.some((mutation) => !this.isOwnNode(mutation.target))) this.scheduleRescan();
+      if (mutations.some((mutation) => !this.isOwnNode(mutation.target))) {
+        this.pageMutated = true;
+        this.scheduleRescan();
+      }
     }).observe(document.documentElement, { childList: true, subtree: true });
     window.addEventListener("scroll", () => this.scheduleDetect(), { passive: true });
     window.addEventListener("hashchange", () => this.scheduleRescan());
@@ -188,10 +193,22 @@ class ReviewPage {
     if (!this.remote) return;
     const startedAt = performance.now();
     this.rendered = findRenderedFiles(this.knownPaths, this.rendered);
-    const elapsed = performance.now() - startedAt;
-    if (elapsed > 500) console.warn("[adhd-review] slow scan", Math.round(elapsed), "ms", describeUnmatched(this.knownPaths, this.rendered, 0));
+    this.recordScan(performance.now() - startedAt);
     this.reportUnmatchedOnce();
     this.detect();
+  }
+
+  // Every 25 scans, the average and worst durations are logged once as a warning when
+  // scans are expensive on this page.
+  recordScan(elapsed) {
+    this.scanStats = this.scanStats || { count: 0, total: 0, max: 0 };
+    const stats = this.scanStats;
+    stats.count += 1;
+    stats.total += elapsed;
+    stats.max = Math.max(stats.max, elapsed);
+    if (stats.count % 25 === 0 && stats.total / stats.count > 40) {
+      console.warn("[adhd-review] scan stats", JSON.stringify({ scans: stats.count, averageMs: Math.round(stats.total / stats.count), maxMs: Math.round(stats.max), ...describeUnmatched(this.knownPaths, this.rendered, 0) }));
+    }
   }
 
   // Once per page: if some "Viewed" checkboxes could not be attached to a file, log a
@@ -215,7 +232,7 @@ class ReviewPage {
   }
 
   detect() {
-    if (!this.remote) return;
+    if (!this.remote || performance.now() < (this.detectPausedUntil || 0)) return;
     const path = fileAtViewportLine(this.rendered, CURRENT_FILE_LINE);
     if (path && path !== this.currentPath) this.setCurrent(path);
   }
@@ -254,12 +271,25 @@ class ReviewPage {
       else location.hash = anchorId;
       lap(link ? "tree click" : "hash", phase);
       phase = performance.now();
+      // Rescan only after the page mutated: polling with full scans starves GitHub's
+      // own rendering. Halfway through, the URL hash is tried as a second strategy.
+      this.pageMutated = true;
+      let hashTried = !link;
       entry = await waitFor(() => {
+        if (!hashTried && performance.now() - phase > RENDER_TIMEOUT_MS / 2) {
+          hashTried = true;
+          location.hash = anchorId;
+          this.pageMutated = true;
+        }
+        if (!this.pageMutated) return null;
+        this.pageMutated = false;
         this.rendered = findRenderedFiles(this.knownPaths, this.rendered);
         return this.rendered.get(path);
-      }, RENDER_TIMEOUT_MS, 60);
+      }, RENDER_TIMEOUT_MS, 100);
       lap("wait render", phase);
-      if (performance.now() - startedAt > 2000) console.warn("[adhd-review] slow jump to", path, timings.join(", "), describeUnmatched(this.knownPaths, this.rendered, 1));
+      if (performance.now() - startedAt > 2000) {
+        console.warn("[adhd-review] slow jump to", path, timings.join(", "), JSON.stringify(describeUnmatched(this.knownPaths, this.rendered, 1)));
+      }
       if (!entry) {
         this.pendingReloadPath = path;
         this.bar.showMessage(`GitHub did not render <code>${escapeHtml(path)}</code>; press the same key again to reload the page on it.`);
@@ -270,6 +300,7 @@ class ReviewPage {
     }
     this.pendingReloadPath = null;
     scrollToContainer(entry.container, this.settings.scrollOffset);
+    this.detectPausedUntil = performance.now() + DETECT_PAUSE_MS;
     this.setCurrent(path);
   }
 
@@ -278,8 +309,10 @@ class ReviewPage {
     return this.goToFile(target?.path);
   }
 
-  goToNextPending() {
-    const target = nextPendingFile(this.ordered, this.currentPath, this.laterPaths());
+  // `from` is the file the action acted on: the current file may already have moved
+  // (GitHub collapses a viewed file and the page reflows) by the time the jump starts.
+  goToNextPending(from = this.currentPath) {
+    const target = nextPendingFile(this.ordered, from, this.laterPaths());
     if (!target) {
       this.bar.showMessage("Nothing left to review: every file is viewed or flagged for later. Time for the wrap-up.");
       return Promise.resolve();
@@ -358,9 +391,9 @@ class ReviewPage {
     const checkbox = this.pageCheckbox(file.path);
     if (isViewed(file) && (!checkbox || checkbox.checked)) {
       this.bar.showMessage("Already viewed, moving on");
-      return this.goToNextPending();
+      return this.goToNextPending(file.path);
     }
-    if (await this.setViewed(file.path, true)) await this.goToNextPending();
+    if (await this.setViewed(file.path, true)) await this.goToNextPending(file.path);
   }
 
   async actionUnview() {
@@ -395,7 +428,7 @@ class ReviewPage {
     else delete later[file.path];
     this.local = await updatePrLocal(this.pr.prKey, { later });
     this.render();
-    if (flagged) await this.goToNextPending();
+    if (flagged) await this.goToNextPending(file.path);
     else this.bar.showMessage("Later flag removed");
   }
 
@@ -408,10 +441,11 @@ class ReviewPage {
       return;
     }
     if (!window.confirm(`Mark the ${pending.length} remaining file(s) of "${position.group.label}" as viewed?`)) return;
+    const from = this.currentPath;
     for (const file of pending) {
       if (!(await this.setViewed(file.path, true))) return;
     }
-    await this.goToNextPending();
+    await this.goToNextPending(from);
   }
 
   async actionNote() {
