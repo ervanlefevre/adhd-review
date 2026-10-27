@@ -25,6 +25,10 @@ class ViewedControl {
 
   get checked() {
     if (this.kind === "input") return this.element.checked;
+    // GitHub's toggle button carries aria-pressed and a filled/empty checkbox icon;
+    // the icon is what the user sees, so it wins when present.
+    const icon = this.element.querySelector(".octicon-checkbox-fill, .octicon-checkbox");
+    if (icon) return icon.classList.contains("octicon-checkbox-fill");
     return this.element.getAttribute("aria-checked") === "true" || this.element.getAttribute("aria-pressed") === "true";
   }
 
