@@ -17,7 +17,7 @@ All data (file list, line counts, viewed state, pending review) comes from the G
 4. Open the extension options (right-click the toolbar icon → Options), paste the token, **Test connection**, **Save**.
 5. Open a pull request's **Files changed** tab. The bar appears at the bottom with a round panel icon above it; press `?` for the keys.
 
-The token is stored in `chrome.storage.local` of this profile only and is sent to `api.github.com` only.
+The token is stored in `chrome.storage.local` of this profile only and is sent to `api.github.com` only. See [PRIVACY.md](PRIVACY.md).
 
 ## Keys
 
