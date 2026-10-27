@@ -1,7 +1,7 @@
 import { loadSettings, loadToken, loadPrLocal, updatePrLocal, parsePrUrl, prStorageKey } from "../settings.js";
 import { parseRulesText } from "../rules.js";
 import { orderFiles, groupFiles, progress, neighbourFile, nextPendingFile, positionInGroup, isViewed } from "../review_model.js";
-import { findRenderedFiles, fileAtViewportLine, anchorIdFor, findFileLink, scrollToContainer, waitFor, isTypingTarget, isViewedCheckbox, describeUnmatched } from "./dom.js";
+import { findRenderedFiles, fileAtViewportLine, anchorIdFor, findFileLink, scrollToContainer, waitFor, isTypingTarget, controlForElement, describeUnmatched, describeViewedCandidates } from "./dom.js";
 import { StickyBar } from "./sticky_bar.js";
 import { Drawer } from "./drawer.js";
 
@@ -37,6 +37,7 @@ class ReviewPage {
     this.injectStylesheet();
     document.addEventListener("keydown", (event) => this.onKeyDown(event), true);
     document.addEventListener("change", (event) => this.onCheckboxChange(event), true);
+    document.addEventListener("click", (event) => setTimeout(() => this.onCheckboxChange(event), 50), true);
     chrome.runtime.onMessage.addListener((message) => {
       this.onMessage(message);
     });
@@ -216,7 +217,14 @@ class ReviewPage {
   reportUnmatchedOnce() {
     if (this.reportedUnmatched) return;
     const report = describeUnmatched(this.knownPaths, this.rendered);
-    if (report.checkboxes === 0) return;
+    if (report.checkboxes === 0) {
+      // No control recognised at all: show what carries the text "Viewed" on this page.
+      const candidates = describeViewedCandidates();
+      if (candidates.length === 0) return;
+      this.reportedUnmatched = true;
+      console.warn("[adhd-review] no Viewed control recognised; markup around the text Viewed:", JSON.stringify(candidates));
+      return;
+    }
     this.reportedUnmatched = true;
     if (report.unmatched > 0) console.warn("[adhd-review] unmatched file headers", JSON.stringify(report));
     else console.debug("[adhd-review] all rendered files matched", report);
@@ -409,14 +417,15 @@ class ReviewPage {
 
   // The user may tick GitHub's checkbox with the mouse: keep the state in sync.
   onCheckboxChange(event) {
-    const input = event.target;
-    if (!this.remote || !(input instanceof HTMLInputElement) || !isViewedCheckbox(input)) return;
-    const path = [...this.rendered].find(([, entry]) => entry.checkbox === input)?.[0];
+    if (!this.remote) return;
+    const control = controlForElement(event.target);
+    if (!control) return;
+    const path = [...this.rendered].find(([, entry]) => entry.checkbox.element === control.element)?.[0];
     if (!path) return;
     const file = this.fileAt(path);
-    if (!file || isViewed(file) === input.checked) return;
-    this.applyViewedLocally(path, input.checked);
-    this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed: input.checked, appliedOnPage: true });
+    if (!file || isViewed(file) === control.checked) return;
+    this.applyViewedLocally(path, control.checked);
+    this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed: control.checked, appliedOnPage: true });
   }
 
   async actionLater() {
