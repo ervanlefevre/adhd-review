@@ -150,17 +150,38 @@ export function scrollToContainer(container, offset) {
   window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
 }
 
+// Resolves with the first truthy value of `predicate`, null after `timeoutMs`. An
+// exception thrown by the predicate rejects instead of leaving the promise pending.
 export function waitFor(predicate, timeoutMs, intervalMs = 150) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const startedAt = Date.now();
     const tick = () => {
-      const value = predicate();
+      let value;
+      try {
+        value = predicate();
+      } catch (error) {
+        reject(error);
+        return;
+      }
       if (value) return resolve(value);
       if (Date.now() - startedAt > timeoutMs) return resolve(null);
       setTimeout(tick, intervalMs);
     };
     tick();
   });
+}
+
+// Diagnostics: a short description of the checkboxes the scan could not attach to a
+// known path, with a snippet of the markup around them.
+export function describeUnmatched(knownPaths, rendered, limit = 2) {
+  const matched = new Set([...rendered.values()].map((entry) => entry.checkbox));
+  const unmatched = findViewedCheckboxes().filter((checkbox) => !matched.has(checkbox));
+  const samples = unmatched.slice(0, limit).map((checkbox) => {
+    let node = checkbox;
+    for (let depth = 0; depth < 4 && node.parentElement; depth += 1) node = node.parentElement;
+    return node.outerHTML.replace(/\s+/g, " ").slice(0, 700);
+  });
+  return { knownPaths: knownPaths.size, rendered: rendered.size, checkboxes: unmatched.length + matched.size, unmatched: unmatched.length, samples };
 }
 
 export function isTypingTarget(target) {

@@ -1,7 +1,7 @@
 import { loadSettings, loadToken, loadPrLocal, updatePrLocal, parsePrUrl, prStorageKey } from "../settings.js";
 import { parseRulesText } from "../rules.js";
 import { orderFiles, groupFiles, progress, neighbourFile, nextPendingFile, positionInGroup, isViewed } from "../review_model.js";
-import { findRenderedFiles, fileAtViewportLine, anchorIdFor, findFileLink, scrollToContainer, waitFor, isTypingTarget, isViewedCheckbox } from "./dom.js";
+import { findRenderedFiles, fileAtViewportLine, anchorIdFor, findFileLink, scrollToContainer, waitFor, isTypingTarget, isViewedCheckbox, describeUnmatched } from "./dom.js";
 import { StickyBar } from "./sticky_bar.js";
 import { Drawer } from "./drawer.js";
 
@@ -178,8 +178,23 @@ class ReviewPage {
 
   rescan() {
     if (!this.remote) return;
+    const startedAt = performance.now();
     this.rendered = findRenderedFiles(this.knownPaths, this.rendered);
+    const elapsed = performance.now() - startedAt;
+    if (elapsed > 500) console.warn("[adhd-review] slow scan", Math.round(elapsed), "ms", describeUnmatched(this.knownPaths, this.rendered, 0));
+    this.reportUnmatchedOnce();
     this.detect();
+  }
+
+  // Once per page: if some "Viewed" checkboxes could not be attached to a file, log a
+  // snippet of their markup so the matching can be adjusted to GitHub's DOM.
+  reportUnmatchedOnce() {
+    if (this.reportedUnmatched) return;
+    const report = describeUnmatched(this.knownPaths, this.rendered);
+    if (report.checkboxes === 0) return;
+    this.reportedUnmatched = true;
+    if (report.unmatched > 0) console.warn("[adhd-review] unmatched file headers", JSON.stringify(report));
+    else console.debug("[adhd-review] all rendered files matched", report);
   }
 
   scheduleDetect() {
@@ -212,21 +227,31 @@ class ReviewPage {
 
   async goToFile(path) {
     if (!path) return;
+    const timings = [];
+    const lap = (label, startedAt) => timings.push(`${label} ${Math.round(performance.now() - startedAt)}ms`);
+    const startedAt = performance.now();
     let entry = this.rendered.get(path);
     if (!entry) {
+      let phase = performance.now();
       const anchorId = await anchorIdFor(path);
+      lap("anchor", phase);
       if (this.pendingReloadPath === path) {
         location.hash = anchorId;
         location.reload();
         return;
       }
+      phase = performance.now();
       const link = findFileLink(path, anchorId);
       if (link) link.click();
       else location.hash = anchorId;
+      lap(link ? "tree click" : "hash", phase);
+      phase = performance.now();
       entry = await waitFor(() => {
         this.rendered = findRenderedFiles(this.knownPaths, this.rendered);
         return this.rendered.get(path);
       }, RENDER_TIMEOUT_MS);
+      lap("wait render", phase);
+      if (performance.now() - startedAt > 2000) console.warn("[adhd-review] slow jump to", path, timings.join(", "), describeUnmatched(this.knownPaths, this.rendered, 1));
       if (!entry) {
         this.pendingReloadPath = path;
         this.bar.showMessage(`GitHub did not render <code>${escapeHtml(path)}</code>; press the same key again to reload the page on it.`);
