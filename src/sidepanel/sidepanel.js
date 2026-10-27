@@ -63,6 +63,18 @@ async function load({ force = false } = {}) {
   notice(null);
   compute();
   renderAll();
+  requestCurrentFile();
+}
+
+// Embedded in the GitHub page: ask the page which file is under review, so the panel
+// does not depend on having caught the last announcement.
+function requestCurrentFile() {
+  if (window.parent === window) return;
+  try {
+    window.parent.postMessage({ source: "adhd-review", type: "requestState" }, "https://github.com");
+  } catch (error) {
+    console.debug("[adhd-review] requestState failed", error);
+  }
 }
 
 function compute() {
@@ -195,6 +207,7 @@ function revealCurrentFile(currentPath, { force = false } = {}) {
 }
 
 function setCurrentFile(path) {
+  if (!path) return;
   if (!state.local) state.local = { later: {}, notes: "", currentPath: null };
   if (state.local.currentPath === path) return;
   state.local.currentPath = path;
@@ -450,6 +463,7 @@ function selectTab(name) {
 // ---- live updates ---------------------------------------------------------
 
 function handleMessage(message) {
+  console.debug("[adhd-review] panel received", message?.type, message?.path || "", "for", message?.prKey, "panel on", state.prKey);
   if (!message || message.prKey !== state.prKey) return;
   switch (message.type) {
     case "currentFile":

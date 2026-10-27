@@ -62,6 +62,7 @@ export class StickyBar {
     this.root.append(this.focusSink);
     this.root.querySelector(".adhd-path").addEventListener("click", onCopyPath);
     this.help = null;
+    this.rightOffset = 0;
     this.messageTimer = null;
   }
 
@@ -107,6 +108,7 @@ export class StickyBar {
 
   // Keeps the bar clear of the sidebar when it is open.
   setRightOffset(pixels) {
+    this.rightOffset = pixels;
     this.root.style.setProperty("right", `${pixels}px`, "important");
     if (this.help) this.help.style.setProperty("right", `${pixels + 16}px`, "important");
   }
@@ -192,7 +194,27 @@ export class StickyBar {
     this.help.innerHTML = `<h3>ADHD Review keys</h3><table>${rows
       .map(([key, text]) => `<tr><td><kbd>${escapeHtml(key)}</kbd></td><td>${escapeHtml(text)}</td></tr>`)
       .join("")}</table>`;
-    document.body.append(this.help);
+    // Top layer and inline layout, like the bar: GitHub's page must not be able to
+    // push the overlay into the document flow.
+    this.help.setAttribute("popover", "manual");
+    for (const [property, value] of Object.entries({
+      position: "fixed",
+      inset: "auto 16px 80px auto",
+      right: `${this.rightOffset + 16}px`,
+      width: "340px",
+      height: "auto",
+      margin: "0",
+      overflow: "visible",
+      display: "block",
+    })) {
+      this.help.style.setProperty(property, value, "important");
+    }
+    document.documentElement.append(this.help);
+    try {
+      this.help.showPopover();
+    } catch {
+      this.help.removeAttribute("popover");
+    }
   }
 
   hideHelp() {

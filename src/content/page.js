@@ -42,6 +42,12 @@ class ReviewPage {
     new MutationObserver(() => this.scheduleRescan()).observe(document.documentElement, { childList: true, subtree: true });
     window.addEventListener("scroll", () => this.scheduleDetect(), { passive: true });
     window.addEventListener("hashchange", () => this.scheduleRescan());
+    // The embedded panel asks for the current file when it (re)loads.
+    window.addEventListener("message", (event) => {
+      if (event.data?.source !== "adhd-review" || event.data.type !== "requestState" || !this.pr) return;
+      if (event.source !== this.drawer.frame.contentWindow) return;
+      this.drawer.notify({ type: "currentFile", prKey: this.pr.prKey, path: this.currentPath });
+    });
     // The window blurs when the focus enters the sidebar's iframe: show it.
     window.addEventListener("blur", () => setTimeout(() => this.drawer.setFocused(document.activeElement === this.drawer.frame), 0));
     window.addEventListener("focus", () => this.drawer.setFocused(false));
@@ -428,10 +434,15 @@ class ReviewPage {
   // Actions run one at a time: a second key pressed while the first is still
   // marking and scrolling must act on the file reached, not on the previous one.
   runAction(action) {
-    this.bar.hideHelp();
-    this.queue = (this.queue || Promise.resolve())
-      .then(() => this.performAction(action))
-      .catch((error) => console.error("[adhd-review] action failed", action, error));
+    if (action !== "help") this.bar.hideHelp();
+    // A hung action (a frame that never loads, a request that never answers) must not
+    // block every following key: each one is capped at 15 seconds.
+    const capped = () =>
+      Promise.race([
+        Promise.resolve(this.performAction(action)),
+        new Promise((resolve) => setTimeout(() => resolve(console.warn("[adhd-review] action timed out", action)), 15000)),
+      ]);
+    this.queue = (this.queue || Promise.resolve()).then(capped).catch((error) => console.error("[adhd-review] action failed", action, error));
     return this.queue;
   }
 

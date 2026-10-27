@@ -104,11 +104,6 @@ body.adhd-review-active { padding-bottom: 66px !important; }
 }
 #adhd-review-bar button:hover { background: #3d444d; }
 #adhd-review-help {
-  position: fixed;
-  right: 16px;
-  bottom: 74px;
-  z-index: 2147483001;
-  width: 320px;
   padding: 12px 14px;
   border: 1px solid #3d444d;
   border-radius: 8px;
