@@ -178,7 +178,7 @@ class ReviewPage {
 
   rescan() {
     if (!this.remote) return;
-    this.rendered = findRenderedFiles(this.knownPaths);
+    this.rendered = findRenderedFiles(this.knownPaths, this.rendered);
     this.detect();
   }
 
@@ -224,7 +224,7 @@ class ReviewPage {
       if (link) link.click();
       else location.hash = anchorId;
       entry = await waitFor(() => {
-        this.rendered = findRenderedFiles(this.knownPaths);
+        this.rendered = findRenderedFiles(this.knownPaths, this.rendered);
         return this.rendered.get(path);
       }, RENDER_TIMEOUT_MS);
       if (!entry) {
@@ -262,7 +262,7 @@ class ReviewPage {
   pageCheckbox(path) {
     let entry = this.rendered.get(path);
     if (!entry?.checkbox?.isConnected) {
-      this.rendered = findRenderedFiles(this.knownPaths);
+      this.rendered = findRenderedFiles(this.knownPaths, this.rendered);
       entry = this.rendered.get(path);
     }
     return entry?.checkbox?.isConnected ? entry.checkbox : null;
@@ -467,7 +467,7 @@ class ReviewPage {
       case "refresh":
         return this.load({ force: true });
       case "help":
-        return this.bar.toggleHelp(keys);
+        return this.bar.toggleHelp(this.settings.keys);
       default:
         return undefined;
     }

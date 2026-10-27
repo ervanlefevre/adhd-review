@@ -6,9 +6,6 @@
 // path from being mistaken for a header (they have no checkbox near them).
 
 const MAX_ANCESTOR_DEPTH = 10;
-// A file header keeps its checkbox close: when the only checkbox of a candidate
-// container is deeper than this, the container is a page layout, not a header.
-const MAX_CHECKBOX_DEPTH = 8;
 // Path texts inside these never belong to a file header (file tree, sidebars).
 const EXCLUDED_ANCESTORS = '[role="tree"], [role="treeitem"], nav, aside, [role="navigation"]';
 
@@ -30,61 +27,88 @@ export function findViewedCheckboxes() {
 }
 
 // Map(path -> { container, checkbox, title }) for the files currently rendered.
-export function findRenderedFiles(knownPaths) {
+// Starts from the "Viewed" checkboxes (one per rendered file) and looks for the path
+// only around each of them, so the cost is proportional to the number of files, not
+// to the size of the diffs. Entries of `previous` whose checkbox is still on the page
+// are kept as they are.
+export function findRenderedFiles(knownPaths, previous = new Map()) {
   const rendered = new Map();
   const checkboxes = findViewedCheckboxes();
-
-  const register = (path, element) => {
-    if (!knownPaths.has(path) || rendered.has(path)) return;
-    if (element.closest(EXCLUDED_ANCESTORS)) return;
-    const found = containerWithOneCheckbox(element, checkboxes);
-    if (found) rendered.set(path, { ...found, title: element });
-  };
-
-  // Classic page: the header carries the path as a data attribute. File tree entries may
-  // carry it too, but they have no "Viewed" checkbox nearby and are skipped.
-  for (const element of document.querySelectorAll(DATA_PATH_SELECTOR)) {
-    register(element.dataset.path || element.dataset.filePath, element);
+  const onPage = new Set(checkboxes);
+  for (const [path, entry] of previous) {
+    if (entry.checkbox && onPage.has(entry.checkbox) && entry.container.isConnected) rendered.set(path, entry);
   }
-  if (rendered.size === knownPaths.size) return rendered;
+  const mapped = new Set([...rendered.values()].map((entry) => entry.checkbox));
 
-  // New page: the path is text. GitHub may split it for wrapping (zero-width spaces,
-  // <wbr>, several spans), so match whole text nodes first, then small elements.
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  let node;
-  while ((node = walker.nextNode())) register(normalizeText(node.data), node.parentElement);
-  for (const element of document.querySelectorAll("a, h2, h3, h4, span, code, strong, button")) {
-    register(normalizeText(element.textContent), element);
-  }
-  for (const element of document.querySelectorAll("[title], [aria-label]")) {
-    register(element.getAttribute("title"), element);
-    register(element.getAttribute("aria-label"), element);
+  for (const checkbox of checkboxes) {
+    if (mapped.has(checkbox)) continue;
+    const container = fileContainer(checkbox, checkboxes);
+    if (!container) continue;
+    const dataPath = container.dataset?.path || container.querySelector(DATA_PATH_SELECTOR)?.dataset.path;
+    const found = dataPath && knownPaths.has(dataPath) ? { path: dataPath, element: container } : pathNear(checkbox, container, knownPaths);
+    if (found && !rendered.has(found.path)) rendered.set(found.path, { container, checkbox, title: found.element });
   }
   return rendered;
 }
 
-function normalizeText(text) {
-  return (text || "").replace(/[\u200b\u200c\u200d\ufeff]/g, "").trim();
+// The file block: the highest ancestor of the checkbox that holds no other "Viewed"
+// checkbox. The climb is capped so that a lone rendered file (virtualized page) does
+// not claim the whole layout.
+function fileContainer(checkbox, checkboxes) {
+  let node = checkbox;
+  for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth += 1) {
+    const parent = node.parentElement;
+    if (!parent || parent === document.body || parent === document.documentElement) break;
+    let count = 0;
+    for (const candidate of checkboxes) if (parent.contains(candidate)) count += 1;
+    if (count > 1) break;
+    node = parent;
+  }
+  return node === checkbox ? null : node;
 }
 
-// Climb from an element until an ancestor contains exactly one "Viewed" checkbox.
-function containerWithOneCheckbox(element, checkboxes) {
-  let ancestor = element;
-  for (let depth = 0; ancestor && depth < MAX_ANCESTOR_DEPTH; depth += 1) {
-    const contained = checkboxes.filter((checkbox) => ancestor.contains(checkbox));
-    if (contained.length === 1) {
-      return depthBetween(contained[0], ancestor) <= MAX_CHECKBOX_DEPTH ? { container: ancestor, checkbox: contained[0] } : null;
+const TITLE_CANDIDATES = "a, h2, h3, h4, span, button, code, strong, [title], [aria-label]";
+const MAX_CANDIDATES = 600;
+
+// Looks for a known path in the header around the checkbox: climbs from the checkbox
+// towards the container, stopping before the level that holds the diff itself.
+function pathNear(checkbox, container, knownPaths) {
+  let node = checkbox.parentElement;
+  while (node && container.contains(node)) {
+    if (node.closest(EXCLUDED_ANCESTORS)) return null;
+    const candidates = node.querySelectorAll(TITLE_CANDIDATES);
+    if (candidates.length > MAX_CANDIDATES) return null;
+    for (const element of candidates) {
+      for (const text of [element.getAttribute("title"), element.getAttribute("aria-label"), normalizeText(element.textContent)]) {
+        const path = matchPath(text, knownPaths);
+        if (path) return { path, element };
+      }
     }
-    if (contained.length > 1) return null;
-    ancestor = ancestor.parentElement;
+    if (node === container) return null;
+    node = node.parentElement;
   }
   return null;
 }
 
-function depthBetween(descendant, ancestor) {
-  let depth = 0;
-  for (let node = descendant; node && node !== ancestor; node = node.parentElement) depth += 1;
-  return depth;
+// Exact match, or a GitHub truncation ("…ack_office/x.erb") that ends one known path.
+function matchPath(text, knownPaths) {
+  if (!text) return null;
+  if (knownPaths.has(text)) return text;
+  if (!text.startsWith("…") && !text.startsWith("...")) return null;
+  const tail = text.replace(/^(…|\.\.\.)/, "");
+  if (tail.length < 4) return null;
+  let found = null;
+  for (const path of knownPaths) {
+    if (path.endsWith(tail)) {
+      if (found) return null;
+      found = path;
+    }
+  }
+  return found;
+}
+
+function normalizeText(text) {
+  return (text || "").replace(/[\u200b\u200c\u200d\ufeff]/g, "").trim();
 }
 
 // The rendered file whose block crosses the horizontal line at `threshold` px from the

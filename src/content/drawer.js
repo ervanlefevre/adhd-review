@@ -111,7 +111,6 @@ export class Drawer {
     this.pushPage(true);
     this.remember(true);
     this.onToggle?.(true, this.width);
-    await this.loaded;
   }
 
   close() {
