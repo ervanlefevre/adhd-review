@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
-# Builds dist/adhd-review-<version>.zip: the files Chrome needs to load the extension
-# unpacked (manifest, src, README). Tests and git metadata are left out.
+# Builds the shareable zip in dist/.
+#   bin/package [suffix]   -> dist/adhd-review-<version>[-suffix].zip, files inside a folder
+#                             (download, unzip, "Load unpacked" on the folder)
+#   bin/package --store    -> dist/adhd-review-<version>-store.zip, manifest.json at the
+#                             zip root as the Chrome Web Store requires
 set -euo pipefail
 cd "$(dirname "$0")/.."
 version=$(node -p "require('./manifest.json').version")
-suffix=${1:-}
-name="adhd-review-${version}${suffix:+-$suffix}"
-rm -rf "dist/$name" "dist/$name.zip"
-mkdir -p "dist/$name"
-cp -R manifest.json src README.md "dist/$name/"
-(cd dist && zip -qr "$name.zip" "$name")
-rm -rf "dist/$name"
+files=(manifest.json src icons README.md)
+mkdir -p dist
+if [[ "${1:-}" == "--store" ]]; then
+  name="adhd-review-${version}-store"
+  rm -f "dist/$name.zip"
+  zip -qr "dist/$name.zip" "${files[@]}" -x '*.svg' -x '*/.DS_Store'
+else
+  suffix=${1:-}
+  name="adhd-review-${version}${suffix:+-$suffix}"
+  rm -rf "dist/$name" "dist/$name.zip"
+  mkdir -p "dist/$name"
+  cp -R "${files[@]}" "dist/$name/"
+  (cd dist && zip -qr "$name.zip" "$name" -x '*.svg' -x '*/.DS_Store')
+  rm -rf "dist/$name"
+fi
 echo "dist/$name.zip"
