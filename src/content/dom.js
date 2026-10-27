@@ -119,6 +119,7 @@ export function describeViewedCandidates(limit = 2) {
 export function findRenderedFiles(knownPaths, previous = new Map()) {
   const rendered = new Map();
   const checkboxes = findViewedCheckboxes();
+  const known = knownIndex(knownPaths);
   const onPage = new Set(checkboxes);
   for (const [path, entry] of previous) {
     if (entry.checkbox && onPage.has(entry.checkbox) && entry.container.isConnected) rendered.set(path, entry);
@@ -130,7 +131,7 @@ export function findRenderedFiles(knownPaths, previous = new Map()) {
     const container = fileContainer(checkbox, checkboxes);
     if (!container) continue;
     const dataPath = container.dataset?.path || container.querySelector(DATA_PATH_SELECTOR)?.dataset.path;
-    const found = dataPath && knownPaths.has(dataPath) ? { path: dataPath, element: container } : pathNear(checkbox, container, knownPaths);
+    const found = dataPath && knownPaths.has(dataPath) ? { path: dataPath, element: container } : pathNear(checkbox, container, known);
     if (found && !rendered.has(found.path)) rendered.set(found.path, { container, checkbox, title: found.element });
   }
   return rendered;
@@ -155,17 +156,24 @@ function fileContainer(checkbox, checkboxes) {
 const TITLE_CANDIDATES = "a, h2, h3, h4, span, button, code, strong, [title], [aria-label]";
 const MAX_CANDIDATES = 600;
 
+// Known paths indexed by their normalized form (no whitespace, no invisible characters).
+function knownIndex(knownPaths) {
+  const byNormalized = new Map();
+  for (const path of knownPaths) byNormalized.set(normalizeText(path), path);
+  return { paths: knownPaths, byNormalized };
+}
+
 // Looks for a known path in the header around the checkbox: climbs from the checkbox
 // towards the container, stopping before the level that holds the diff itself.
-function pathNear(checkbox, container, knownPaths) {
+function pathNear(checkbox, container, known) {
   let node = checkbox.element.parentElement;
   while (node && container.contains(node)) {
     if (node.closest(EXCLUDED_ANCESTORS)) return null;
     const candidates = node.querySelectorAll(TITLE_CANDIDATES);
     if (candidates.length > MAX_CANDIDATES) return null;
     for (const element of candidates) {
-      for (const text of [element.getAttribute("title"), element.getAttribute("aria-label"), normalizeText(element.textContent)]) {
-        const path = matchPath(text, knownPaths);
+      for (const text of candidateTexts(element)) {
+        const path = matchPath(text, known);
         if (path) return { path, element };
       }
     }
@@ -175,16 +183,23 @@ function pathNear(checkbox, container, knownPaths) {
   return null;
 }
 
-// Exact match, or a GitHub truncation ("…ack_office/x.erb") that ends one known path.
-function matchPath(text, knownPaths) {
+function candidateTexts(element) {
+  return [element.getAttribute("title"), element.getAttribute("aria-label"), element.textContent];
+}
+
+// Exact match after normalization, or a GitHub truncation ("…ack_office/x.erb") that
+// ends exactly one known path.
+function matchPath(rawText, known) {
+  const text = normalizeText(rawText);
   if (!text) return null;
-  if (knownPaths.has(text)) return text;
+  const exact = known.byNormalized.get(text);
+  if (exact) return exact;
   if (!text.startsWith("…") && !text.startsWith("...")) return null;
   const tail = text.replace(/^(…|\.\.\.)/, "");
   if (tail.length < 4) return null;
   let found = null;
-  for (const path of knownPaths) {
-    if (path.endsWith(tail)) {
+  for (const [normalized, path] of known.byNormalized) {
+    if (normalized.endsWith(tail)) {
       if (found) return null;
       found = path;
     }
@@ -192,8 +207,10 @@ function matchPath(text, knownPaths) {
   return found;
 }
 
+// Whitespace and the invisible characters GitHub may insert for wrapping (zero-width
+// spaces, word joiners, soft hyphens) are dropped before comparing.
 function normalizeText(text) {
-  return (text || "").replace(/[\u200b\u200c\u200d\ufeff]/g, "").trim();
+  return (text || "").replace(/[\s\u200b\u200c\u200d\ufeff\u00ad\u2060]/g, "");
 }
 
 // The rendered file whose block crosses the horizontal line at `threshold` px from the
@@ -260,13 +277,32 @@ export function waitFor(predicate, timeoutMs, intervalMs = 150) {
 // known path, with a snippet of the markup around them.
 export function describeUnmatched(knownPaths, rendered, limit = 2) {
   const matched = new Set([...rendered.values()].map((entry) => entry.checkbox));
-  const unmatched = findViewedCheckboxes().filter((checkbox) => !matched.has(checkbox));
+  const checkboxes = findViewedCheckboxes();
+  const unmatched = checkboxes.filter((checkbox) => !matched.has(checkbox));
   const samples = unmatched.slice(0, limit).map((checkbox) => {
-    let node = checkbox.element;
-    for (let depth = 0; depth < 4 && node.parentElement; depth += 1) node = node.parentElement;
-    return node.outerHTML.replace(/\s+/g, " ").slice(0, 700);
+    // What the matcher saw, level by level, from the control up to its container.
+    const container = fileContainer(checkbox, checkboxes);
+    const levels = [];
+    let node = checkbox.element.parentElement;
+    while (node && container && container.contains(node) && levels.length < 8) {
+      const candidates = node.querySelectorAll(TITLE_CANDIDATES);
+      const texts = new Set();
+      for (const element of candidates) {
+        for (const text of candidateTexts(element)) {
+          const trimmed = (text || "").replace(/\s+/g, " ").trim();
+          if (trimmed && trimmed.length < 160) texts.add(trimmed);
+          if (texts.size >= 12) break;
+        }
+      }
+      levels.push({ tag: node.tagName.toLowerCase(), className: (node.className || "").toString().slice(0, 40), candidates: candidates.length, excluded: Boolean(node.closest(EXCLUDED_ANCESTORS)), texts: [...texts] });
+      if (node === container) break;
+      node = node.parentElement;
+    }
+    const header = checkbox.element.closest("[data-diff-header-wrapper], header") || checkbox.element.parentElement?.parentElement;
+    const markup = (header?.outerHTML || "").replace(/<svg[\s\S]*?<\/svg>/g, "<svg/>").replace(/ class="[^"]*"/g, "").replace(/\s+/g, " ").slice(0, 2500);
+    return { levels, markup };
   });
-  return { knownPaths: knownPaths.size, rendered: rendered.size, checkboxes: unmatched.length + matched.size, unmatched: unmatched.length, samples };
+  return { knownPaths: knownPaths.size, rendered: rendered.size, checkboxes: checkboxes.length, unmatched: unmatched.length, samples };
 }
 
 export function isTypingTarget(target) {
