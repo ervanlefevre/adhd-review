@@ -39,7 +39,10 @@ class ReviewPage {
       this.onMessage(message);
     });
     chrome.storage.onChanged.addListener((changes, area) => this.onStorageChanged(changes, area));
-    new MutationObserver(() => this.scheduleRescan()).observe(document.documentElement, { childList: true, subtree: true });
+    // Mutations inside our own bar, help and sidebar never change GitHub's file blocks.
+    new MutationObserver((mutations) => {
+      if (mutations.some((mutation) => !this.isOwnNode(mutation.target))) this.scheduleRescan();
+    }).observe(document.documentElement, { childList: true, subtree: true });
     window.addEventListener("scroll", () => this.scheduleDetect(), { passive: true });
     window.addEventListener("hashchange", () => this.scheduleRescan());
     // The embedded panel asks for the current file when it (re)loads.
@@ -53,6 +56,11 @@ class ReviewPage {
     window.addEventListener("focus", () => this.drawer.setFocused(false));
     setInterval(() => this.checkUrl(), 500);
     this.checkUrl();
+  }
+
+  isOwnNode(node) {
+    const element = node instanceof Element ? node : node.parentElement;
+    return Boolean(element?.closest("#adhd-review-bar, #adhd-review-help, #adhd-review-drawer, #adhd-review-icon, #adhd-review-edge"));
   }
 
   // The manifest also declares the stylesheet, but a copy appended last in <head> wins
@@ -249,7 +257,7 @@ class ReviewPage {
       entry = await waitFor(() => {
         this.rendered = findRenderedFiles(this.knownPaths, this.rendered);
         return this.rendered.get(path);
-      }, RENDER_TIMEOUT_MS);
+      }, RENDER_TIMEOUT_MS, 60);
       lap("wait render", phase);
       if (performance.now() - startedAt > 2000) console.warn("[adhd-review] slow jump to", path, timings.join(", "), describeUnmatched(this.knownPaths, this.rendered, 1));
       if (!entry) {

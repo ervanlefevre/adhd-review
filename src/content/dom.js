@@ -22,8 +22,21 @@ export function isViewedCheckbox(input) {
   return texts.some((text) => /viewed/i.test(text || ""));
 }
 
+// The "is this a Viewed checkbox" answer is cached per element: label lookups are not
+// free and the scan runs often.
+const viewedCheckboxCache = new WeakMap();
+
 export function findViewedCheckboxes() {
-  return [...document.querySelectorAll('input[type="checkbox"]')].filter(isViewedCheckbox);
+  const result = [];
+  for (const input of document.querySelectorAll('input[type="checkbox"]')) {
+    let viewed = viewedCheckboxCache.get(input);
+    if (viewed === undefined) {
+      viewed = isViewedCheckbox(input);
+      viewedCheckboxCache.set(input, viewed);
+    }
+    if (viewed) result.push(input);
+  }
+  return result;
 }
 
 // Map(path -> { container, checkbox, title }) for the files currently rendered.
