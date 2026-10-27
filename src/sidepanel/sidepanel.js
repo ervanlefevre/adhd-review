@@ -132,7 +132,10 @@ function renderProgress() {
       const done = group.viewedFiles === group.totalFiles;
       const containsCurrent = group.files.some((file) => file.path === currentPath);
       const details = element("details", { className: `group ${done ? "done" : ""} ${containsCurrent ? "active" : ""}`, dataset: { label: group.label } });
-      details.open = firstRender ? !done || containsCurrent : openGroups.has(group.label) || containsCurrent;
+      // A fully viewed group folds itself (and stays folded unless opened by hand);
+      // a pending group opens when it holds the file under review.
+      const justDone = done && doneGroups !== null && !doneGroups.has(group.label);
+      details.open = done ? !firstRender && !justDone && openGroups.has(group.label) : firstRender || openGroups.has(group.label) || containsCurrent;
       const summary = element("summary");
       summary.append(element("span", { className: "label", textContent: group.label }));
       const count = element("span", { className: "count", textContent: `${group.viewedFiles}/${group.totalFiles}` });
