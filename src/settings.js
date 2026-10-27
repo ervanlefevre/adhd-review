@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS = {
   lineCap: DEFAULT_LINE_CAP,
   keys: DEFAULT_KEYS,
   scrollOffset: 0,
+  progressColor: "#3fb950",
 };
 
 export async function loadSettings() {

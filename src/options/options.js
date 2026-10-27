@@ -19,6 +19,7 @@ const tokenInput = document.getElementById("token");
 const rulesInput = document.getElementById("rules");
 const lineCapInput = document.getElementById("lineCap");
 const scrollOffsetInput = document.getElementById("scrollOffset");
+const progressColorInput = document.getElementById("progressColor");
 const keysContainer = document.getElementById("keys");
 const connectionStatus = document.getElementById("connection");
 const rulesStatus = document.getElementById("rulesStatus");
@@ -35,6 +36,7 @@ async function fill() {
   rulesInput.value = settings.rulesText;
   lineCapInput.value = settings.lineCap;
   scrollOffsetInput.value = settings.scrollOffset;
+  progressColorInput.value = settings.progressColor;
   keysContainer.replaceChildren(
     ...Object.keys(DEFAULT_KEYS).map((action) => {
       const label = document.createElement("label");
@@ -76,6 +78,7 @@ form.addEventListener("submit", async (event) => {
     rulesText: rulesInput.value,
     lineCap: Math.max(1, Number(lineCapInput.value) || 150),
     scrollOffset: Number(scrollOffsetInput.value) || 0,
+    progressColor: progressColorInput.value || "#3fb950",
     keys,
   });
   setStatus(saveStatus, "Saved", "ok");

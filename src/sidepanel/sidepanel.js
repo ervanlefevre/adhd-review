@@ -4,7 +4,7 @@ import { orderFiles, groupFiles, progress, isViewed, changedLines } from "../rev
 
 const elements = Object.fromEntries(
   [
-    "prLink", "prNumber", "refresh", "settings", "close", "notice", "percent", "counts", "overallFill", "groups", "addFileNote", "notes",
+    "prLink", "prNumber", "locate", "refresh", "settings", "close", "notice", "percent", "counts", "overallFill", "groups", "addFileNote", "notes",
     "commentsCount", "comments", "notesPreview", "laterCount", "later", "reviewBody", "submitResult",
   ].map((id) => [id, document.getElementById(id)])
 );
@@ -66,6 +66,7 @@ async function load({ force = false } = {}) {
 }
 
 function compute() {
+  document.documentElement.style.setProperty("--progress", state.settings?.progressColor || "#3fb950");
   if (!state.remote) return;
   const { rules } = parseRulesText(state.settings.rulesText);
   state.ordered = orderFiles(state.remote.files, rules, { lineCap: state.settings.lineCap });
@@ -175,27 +176,75 @@ function renderProgress() {
 // When the file under review changes, its section comes to the top of the list so the
 // section header and the row are both visible; later renders only keep the row in view.
 let revealedPath = null;
-function revealCurrentFile(currentPath) {
+function revealCurrentFile(currentPath, { force = false } = {}) {
   const row = elements.groups.querySelector("li.current");
-  if (!row) return;
-  if (currentPath !== revealedPath) {
+  if (!row) {
+    if (currentPath) console.debug("[adhd-review] current file not in the list", currentPath);
+    return;
+  }
+  if (force || currentPath !== revealedPath) {
     revealedPath = currentPath;
-    row.closest("details.group")?.scrollIntoView({ block: "start" });
+    const details = row.closest("details.group");
+    if (details) details.open = true;
+    details?.scrollIntoView({ block: "start" });
   }
   row.scrollIntoView({ block: "nearest" });
+}
+
+function setCurrentFile(path) {
+  if (!state.local) state.local = { later: {}, notes: "", currentPath: null };
+  if (state.local.currentPath === path) return;
+  state.local.currentPath = path;
+  renderProgress();
 }
 
 // Groups that just reached 100% get a flash, a confetti burst and a toast. The first
 // render of a pull request only records what is already done.
 let doneGroups = null;
 let doneGroupsKey = null;
+let allDone = false;
 function celebrateCompletedGroups() {
   const done = new Set(state.groups.filter((group) => group.viewedFiles === group.totalFiles).map((group) => group.label));
+  const everything = state.ordered.length > 0 && state.ordered.every(isViewed);
   if (doneGroups && doneGroupsKey === state.prKey) {
-    for (const label of done) if (!doneGroups.has(label)) celebrate(label);
+    if (everything && !allDone) celebrateAll();
+    else for (const label of done) if (!doneGroups.has(label)) celebrate(label);
   }
   doneGroups = done;
+  allDone = everything;
   doneGroupsKey = state.prKey;
+}
+
+function celebrateAll() {
+  const overall = document.querySelector(".overall");
+  overall.classList.add("celebrate");
+  setTimeout(() => overall.classList.remove("celebrate"), 1600);
+  confetti(overall, 60, 160);
+  confetti(elements.groups, 40, 400);
+  const toast = element("div", { className: "toast big", textContent: `🎉 All ${state.ordered.length} files reviewed! Time for the wrap-up.` });
+  const go = element("button", { className: "small", textContent: "Open wrap-up" });
+  go.addEventListener("click", () => {
+    selectTab("wrapup");
+    toast.remove();
+  });
+  toast.append(" ", go);
+  document.body.append(toast);
+  setTimeout(() => toast.remove(), 8000);
+}
+
+function confetti(container, count, spread) {
+  const colors = ["#3fb950", "#58a6ff", "#d29922", "#f85149", "#a371f7"];
+  for (let index = 0; index < count; index += 1) {
+    const piece = element("span", { className: "confetti" });
+    piece.style.left = `${5 + Math.random() * 90}%`;
+    piece.style.top = `${Math.random() * 40}%`;
+    piece.style.background = colors[index % colors.length];
+    piece.style.setProperty("--dx", `${(Math.random() - 0.5) * spread}px`);
+    piece.style.setProperty("--rot", `${(Math.random() - 0.5) * 720}deg`);
+    piece.style.animationDelay = `${Math.random() * 400}ms`;
+    container.append(piece);
+    setTimeout(() => piece.remove(), 2000);
+  }
 }
 
 function celebrate(label) {
@@ -375,6 +424,10 @@ for (const button of submitButtons) {
 }
 
 elements.refresh.addEventListener("click", () => load({ force: true }));
+elements.locate.addEventListener("click", () => {
+  selectTab("progress");
+  revealCurrentFile(state.local?.currentPath, { force: true });
+});
 elements.settings.addEventListener("click", () => chrome.runtime.openOptionsPage());
 
 // Embedded in the page's sidebar: the close button asks the page to fold the sidebar.
@@ -394,6 +447,7 @@ function selectTab(name) {
 // ---- live updates ---------------------------------------------------------
 
 chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === "currentFile" && message.prKey === state.prKey) setCurrentFile(message.path);
   if (message.type === "remoteStateChanged" && message.prKey === state.prKey) load();
   if (message.type === "focusNotes" && message.prKey === state.prKey) {
     selectTab("notes");

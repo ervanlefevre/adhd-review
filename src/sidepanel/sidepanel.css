@@ -67,7 +67,13 @@ section[hidden] { display: none; }
 .overall .numbers { display: flex; justify-content: space-between; margin-bottom: 4px; }
 .overall .numbers strong { font-size: 20px; }
 .track { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
-.track .fill { height: 100%; background: var(--success); transition: width 200ms; }
+.track .fill { height: 100%; background: var(--progress, var(--success)); transition: width 200ms; }
+.overall { position: relative; }
+.overall.celebrate .track { animation: overall-celebrate 1.5s ease-out; }
+@keyframes overall-celebrate { 0% { box-shadow: 0 0 0 0 var(--progress, var(--success)); } 100% { box-shadow: 0 0 0 16px transparent; } }
+#groups { position: relative; }
+.toast.big { font-size: 14px; padding: 12px 18px; border-radius: 12px; display: flex; align-items: center; gap: 10px; max-width: 90%; }
+.toast.big button { background: #fff; color: var(--success); border-color: transparent; }
 .track.small { height: 5px; }
 
 details.group { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; background: var(--bg); scroll-margin-top: 96px; }

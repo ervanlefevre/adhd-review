@@ -47,3 +47,7 @@ Rules live in the options, one per line: `Label | regex | weight`. A file belong
 - `npm test` runs the pure model tests (`src/review_model.js`, `src/rules.js`) with `node --test`.
 - GitHub's new "Files changed" page is a React application with generated class names. `src/content/dom.js` therefore locates file blocks from two stable facts, a checkbox labelled "Viewed" and the file path as text, with a fast path on `data-path` for the classic page. Anchors use GitHub's `#diff-<sha256(path)>` convention.
 - After editing, reload the extension in `chrome://extensions` and reload the pull request page.
+
+## Later
+
+- Per-commit visualization: review a pull request commit by commit, with the same order, progress and keys scoped to one commit at a time.

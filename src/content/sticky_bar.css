@@ -21,8 +21,8 @@ html.adhd-review-active { scroll-padding-bottom: 70px; }
 body.adhd-review-active { padding-bottom: 66px !important; }
 #adhd-review-bar.adhd-pulse .adhd-track { animation: adhd-pulse 900ms ease-out 2; }
 @keyframes adhd-pulse {
-  0% { box-shadow: 0 0 0 0 #3fb95099; }
-  100% { box-shadow: 0 0 0 10px #3fb95000; }
+  0% { box-shadow: 0 0 0 0 var(--adhd-progress, #3fb950); }
+  100% { box-shadow: 0 0 0 12px transparent; }
 }
 #adhd-review-bar .adhd-group {
   flex: 0 0 auto;
@@ -73,7 +73,10 @@ body.adhd-review-active { padding-bottom: 66px !important; }
   background: #30363d;
   overflow: hidden;
 }
-#adhd-review-bar .adhd-progress .adhd-fill { display: block; height: 100%; width: 0; background: #3fb950; transition: width 200ms; }
+#adhd-review-bar .adhd-progress .adhd-fill { display: block; height: 100%; width: 0; background: var(--adhd-progress, #3fb950); transition: width 200ms; }
+#adhd-review-bar .adhd-busy { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; color: #e3b341; white-space: nowrap; }
+#adhd-review-bar .adhd-spin { width: 12px; height: 12px; border: 2px solid #e3b34155; border-top-color: #e3b341; border-radius: 50%; animation: adhd-spin 700ms linear infinite; }
+@keyframes adhd-spin { to { transform: rotate(360deg); } }
 #adhd-review-bar .adhd-progress .adhd-pct { font-weight: 700; min-width: 34px; text-align: right; }
 #adhd-review-bar .adhd-progress .adhd-detail { color: #8b949e; }
 #adhd-review-bar .adhd-message { flex: 1 1 auto; color: #e3b341; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

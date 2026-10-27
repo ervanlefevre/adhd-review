@@ -88,6 +88,7 @@ class ReviewPage {
     this.drawer.restore();
     this.settings = await loadSettings();
     this.bar.setKeys(this.settings.keys);
+    this.bar.setColor(this.settings.progressColor);
     this.bar.render({ progress: null });
     if (!(await loadToken())) {
       this.bar.showMessage('No GitHub token yet: <a href="#" class="adhd-options">open the options</a>', { sticky: true });
@@ -122,14 +123,21 @@ class ReviewPage {
 
   celebrateCompletedGroups() {
     const done = new Set(this.groups.filter((group) => group.viewedFiles === group.totalFiles).map((group) => group.label));
+    const allDone = this.ordered.length > 0 && this.ordered.every(isViewed);
     if (this.doneGroups && this.doneGroupsKey === this.pr.prKey) {
-      const completed = [...done].filter((label) => !this.doneGroups.has(label));
-      if (completed.length > 0) {
-        this.bar.showMessage(`🎉 ${escapeHtml(completed.join(", "))} complete!`);
+      if (allDone && !this.allDone) {
+        this.bar.showMessage(`🎉🎉🎉 All ${this.ordered.length} files reviewed! Open the panel (<kbd>${escapeHtml(this.settings.keys.panel)}</kbd>) for the wrap-up.`, { sticky: true });
         this.bar.pulse();
+      } else {
+        const completed = [...done].filter((label) => !this.doneGroups.has(label));
+        if (completed.length > 0) {
+          this.bar.showMessage(`🎉 ${escapeHtml(completed.join(", "))} complete!`);
+          this.bar.pulse();
+        }
       }
     }
     this.doneGroups = done;
+    this.allDone = allDone;
     this.doneGroupsKey = this.pr.prKey;
   }
 
@@ -186,6 +194,8 @@ class ReviewPage {
   setCurrent(path) {
     this.currentPath = path;
     this.render();
+    // The panel is told right away; storage keeps it for a panel opened later.
+    chrome.runtime.sendMessage({ type: "currentFile", prKey: this.pr.prKey, path }).catch(() => {});
     clearTimeout(this.saveCurrentTimer);
     this.saveCurrentTimer = setTimeout(() => updatePrLocal(this.pr.prKey, { currentPath: path }), 300);
   }
@@ -273,7 +283,9 @@ class ReviewPage {
       await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage: true });
       return true;
     }
+    this.bar.beginBusy(viewed ? "marking through the API…" : "unmarking through the API…");
     const response = await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage: false });
+    this.bar.endBusy();
     if (!response.ok) {
       this.bar.showMessage(escapeHtml(response.error), { sticky: true });
       await this.load({ force: true });
@@ -284,9 +296,14 @@ class ReviewPage {
 
   async verifyTick(path, checkbox, viewed) {
     const current = () => (checkbox.isConnected ? checkbox : this.pageCheckbox(path));
+    this.bar.beginBusy(viewed ? "waiting for GitHub to tick…" : "waiting for GitHub to untick…");
     const settled = await waitFor(() => current()?.checked === viewed, 5000, 150);
-    if (settled || !current()) return;
+    if (settled || !current()) {
+      this.bar.endBusy();
+      return;
+    }
     const response = await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage: false });
+    this.bar.endBusy();
     this.bar.showMessage(
       response.ok
         ? `GitHub's checkbox did not react for <code>${escapeHtml(path)}</code>; marked through the API (reload to see it ticked)`

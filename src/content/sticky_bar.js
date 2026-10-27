@@ -31,6 +31,7 @@ export class StickyBar {
         <span class="adhd-group"></span>
         <span class="adhd-path" title="Click to copy the path"><span></span></span>
         <span class="adhd-flag" hidden></span>
+        <span class="adhd-busy" hidden><span class="adhd-spin"></span><span class="adhd-busy-text"></span></span>
       </div>
       <div class="adhd-row">
         <span class="adhd-progress">
@@ -46,6 +47,9 @@ export class StickyBar {
     this.group = this.root.querySelector(".adhd-group");
     this.path = this.root.querySelector(".adhd-path span");
     this.flag = this.root.querySelector(".adhd-flag");
+    this.busy = this.root.querySelector(".adhd-busy");
+    this.busyText = this.root.querySelector(".adhd-busy-text");
+    this.busyCount = 0;
     this.message = this.root.querySelector(".adhd-message");
     this.fill = this.root.querySelector(".adhd-fill");
     this.pct = this.root.querySelector(".adhd-pct");
@@ -133,11 +137,27 @@ export class StickyBar {
     }
   }
 
-  // Brief green pulse of the progress track (a group just got completed).
+  // Brief pulse of the progress track (a group just got completed).
   pulse() {
     this.root.classList.remove("adhd-pulse");
     void this.root.offsetWidth;
     this.root.classList.add("adhd-pulse");
+  }
+
+  setColor(color) {
+    this.root.style.setProperty("--adhd-progress", color);
+  }
+
+  // Spinner while a mark is waiting for GitHub; several may be in flight.
+  beginBusy(text) {
+    this.busyCount += 1;
+    this.busyText.textContent = text;
+    this.busy.hidden = false;
+  }
+
+  endBusy() {
+    this.busyCount = Math.max(0, this.busyCount - 1);
+    if (this.busyCount === 0) this.busy.hidden = true;
   }
 
   showMessage(html, { sticky = false } = {}) {
