@@ -154,9 +154,23 @@ export class Drawer {
     if (drawerOpen && !this.isOpen) await this.open();
   }
 
+  // Direct channel to the embedded panel: runtime messages from a content script are
+  // not reliably delivered to an extension iframe living inside the web page, while
+  // postMessage to the frame always is.
   async send(message) {
     await this.loaded;
+    this.notify(message);
     return chrome.runtime.sendMessage(message).catch(() => {});
+  }
+
+  notify(message) {
+    const target = this.frame.contentWindow;
+    if (!target) return;
+    try {
+      target.postMessage({ source: "adhd-review", ...message }, new URL(chrome.runtime.getURL("/")).origin);
+    } catch (error) {
+      console.debug("[adhd-review] panel notify failed", error);
+    }
   }
 }
 

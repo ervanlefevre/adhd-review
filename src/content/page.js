@@ -195,7 +195,9 @@ class ReviewPage {
     this.currentPath = path;
     this.render();
     // The panel is told right away; storage keeps it for a panel opened later.
-    chrome.runtime.sendMessage({ type: "currentFile", prKey: this.pr.prKey, path }).catch(() => {});
+    const message = { type: "currentFile", prKey: this.pr.prKey, path };
+    this.drawer.notify(message);
+    chrome.runtime.sendMessage(message).catch(() => {});
     clearTimeout(this.saveCurrentTimer);
     this.saveCurrentTimer = setTimeout(() => updatePrLocal(this.pr.prKey, { currentPath: path }), 300);
   }

@@ -449,14 +449,31 @@ function selectTab(name) {
 
 // ---- live updates ---------------------------------------------------------
 
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === "currentFile" && message.prKey === state.prKey) setCurrentFile(message.path);
-  if (message.type === "remoteStateChanged" && message.prKey === state.prKey) load();
-  if (message.type === "focusNotes" && message.prKey === state.prKey) {
-    selectTab("notes");
-    elements.notes.focus();
-    elements.notes.setSelectionRange(elements.notes.value.length, elements.notes.value.length);
+function handleMessage(message) {
+  if (!message || message.prKey !== state.prKey) return;
+  switch (message.type) {
+    case "currentFile":
+      setCurrentFile(message.path);
+      break;
+    case "remoteStateChanged":
+      load();
+      break;
+    case "focusNotes":
+      selectTab("notes");
+      elements.notes.focus();
+      elements.notes.setSelectionRange(elements.notes.value.length, elements.notes.value.length);
+      break;
+    default:
+      break;
   }
+}
+
+// Two channels: extension runtime messages (native side panel, background) and
+// postMessage from the GitHub page hosting the embedded panel.
+chrome.runtime.onMessage.addListener((message) => handleMessage(message));
+window.addEventListener("message", (event) => {
+  if (event.origin !== "https://github.com" || event.data?.source !== "adhd-review") return;
+  handleMessage(event.data);
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
