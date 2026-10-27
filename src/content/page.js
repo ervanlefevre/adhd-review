@@ -1,7 +1,7 @@
 import { loadSettings, loadToken, loadPrLocal, updatePrLocal, parsePrUrl, prStorageKey } from "../settings.js";
 import { parseRulesText } from "../rules.js";
 import { orderFiles, groupFiles, progress, neighbourFile, nextPendingFile, positionInGroup, isViewed } from "../review_model.js";
-import { findRenderedFiles, fileAtViewportLine, anchorIdFor, findFileLink, scrollToContainer, waitFor, isTypingTarget, controlForElement, describeUnmatched, describeViewedCandidates } from "./dom.js";
+import { findRenderedFiles, fileAtViewportLine, anchorIdFor, anchorIndexFor, findFileLink, scrollToContainer, waitFor, isTypingTarget, controlForElement, describeUnmatched, describeViewedCandidates } from "./dom.js";
 import { StickyBar } from "./sticky_bar.js";
 import { Drawer } from "./drawer.js";
 
@@ -137,8 +137,20 @@ class ReviewPage {
     this.ordered = orderFiles(this.remote.files, rules, { lineCap: this.settings.lineCap });
     this.groups = groupFiles(this.ordered);
     this.knownPaths = new Set(this.ordered.map((file) => file.path));
+    this.buildAnchorIndex();
     this.celebrateCompletedGroups();
     this.render();
+  }
+
+  // GitHub's title links use "#diff-<sha256(path)>": the map is built once per file list.
+  buildAnchorIndex() {
+    const signature = [...this.knownPaths].join("\n");
+    if (signature === this.anchorIndexSignature) return;
+    this.anchorIndexSignature = signature;
+    anchorIndexFor(this.knownPaths).then((index) => {
+      this.anchorIndex = index;
+      this.scheduleRescan();
+    });
   }
 
   celebrateCompletedGroups() {
@@ -193,7 +205,7 @@ class ReviewPage {
   rescan() {
     if (!this.remote) return;
     const startedAt = performance.now();
-    this.rendered = findRenderedFiles(this.knownPaths, this.rendered);
+    this.rendered = findRenderedFiles(this.knownPaths, this.rendered, this.anchorIndex);
     this.recordScan(performance.now() - startedAt);
     this.reportUnmatchedOnce();
     this.detect();
@@ -291,7 +303,7 @@ class ReviewPage {
         }
         if (!this.pageMutated) return null;
         this.pageMutated = false;
-        this.rendered = findRenderedFiles(this.knownPaths, this.rendered);
+        this.rendered = findRenderedFiles(this.knownPaths, this.rendered, this.anchorIndex);
         return this.rendered.get(path);
       }, RENDER_TIMEOUT_MS, 100);
       lap("wait render", phase);
@@ -336,7 +348,7 @@ class ReviewPage {
   pageCheckbox(path) {
     let entry = this.rendered.get(path);
     if (!entry?.checkbox?.isConnected) {
-      this.rendered = findRenderedFiles(this.knownPaths, this.rendered);
+      this.rendered = findRenderedFiles(this.knownPaths, this.rendered, this.anchorIndex);
       entry = this.rendered.get(path);
     }
     return entry?.checkbox?.isConnected ? entry.checkbox : null;

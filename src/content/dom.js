@@ -58,9 +58,10 @@ export function isViewedCheckbox(input) {
   return texts.some((text) => text && (VIEWED_TEXT.test(text) || /viewed/i.test(text) && text.trim().length < 40));
 }
 
+// aria-label is "Viewed" or "Not Viewed" depending on the state; the inner text is "Viewed".
 function isViewedToggle(element) {
   const texts = [...labelText(element), element.textContent];
-  return texts.some((text) => text && VIEWED_TEXT.test(text));
+  return texts.some((text) => text && (VIEWED_TEXT.test(text) || /^\s*not viewed\s*$/i.test(text)));
 }
 
 // The "is this a Viewed control" answer is cached per element: label lookups are not
@@ -116,7 +117,9 @@ export function describeViewedCandidates(limit = 2) {
 // only around each of them, so the cost is proportional to the number of files, not
 // to the size of the diffs. Entries of `previous` whose checkbox is still on the page
 // are kept as they are.
-export function findRenderedFiles(knownPaths, previous = new Map()) {
+// `anchors` maps GitHub's "diff-<sha256(path)>" ids to paths (built by the caller,
+// hashing is asynchronous); the header's title link carries that id.
+export function findRenderedFiles(knownPaths, previous = new Map(), anchors = null) {
   const rendered = new Map();
   const checkboxes = findViewedCheckboxes();
   const known = knownIndex(knownPaths);
@@ -130,11 +133,25 @@ export function findRenderedFiles(knownPaths, previous = new Map()) {
     if (mapped.has(checkbox)) continue;
     const container = fileContainer(checkbox, checkboxes);
     if (!container) continue;
-    const dataPath = container.dataset?.path || container.querySelector(DATA_PATH_SELECTOR)?.dataset.path;
-    const found = dataPath && knownPaths.has(dataPath) ? { path: dataPath, element: container } : pathNear(checkbox, container, known);
+    const found = pathFromAttributes(container, knownPaths, anchors) || pathNear(checkbox, container, known);
     if (found && !rendered.has(found.path)) rendered.set(found.path, { container, checkbox, title: found.element });
   }
   return rendered;
+}
+
+// Cheap exact handles GitHub puts in the header: data-path (classic page),
+// data-file-path (the "Expand all lines" button) and the title link's #diff-<sha> anchor.
+function pathFromAttributes(container, knownPaths, anchors) {
+  const dataElement = container.matches(DATA_PATH_SELECTOR) ? container : container.querySelector(DATA_PATH_SELECTOR);
+  const dataPath = dataElement ? dataElement.dataset.path || dataElement.dataset.filePath : null;
+  if (dataPath && knownPaths.has(dataPath)) return { path: dataPath, element: dataElement };
+  if (anchors) {
+    for (const link of container.querySelectorAll('a[href*="#diff-"]')) {
+      const path = anchors.get(link.getAttribute("href").split("#")[1]);
+      if (path) return { path, element: link };
+    }
+  }
+  return null;
 }
 
 // The file block: the highest ancestor of the checkbox that holds no other "Viewed"
@@ -207,10 +224,10 @@ function matchPath(rawText, known) {
   return found;
 }
 
-// Whitespace and the invisible characters GitHub may insert for wrapping (zero-width
-// spaces, word joiners, soft hyphens) are dropped before comparing.
+// Whitespace and every Unicode format character (zero-width spaces, joiners, soft
+// hyphens, the left-to-right marks GitHub wraps paths in) are dropped before comparing.
 function normalizeText(text) {
-  return (text || "").replace(/[\s\u200b\u200c\u200d\ufeff\u00ad\u2060]/g, "");
+  return (text || "").replace(/[\s\p{Cf}]/gu, "");
 }
 
 // The rendered file whose block crosses the horizontal line at `threshold` px from the
@@ -227,6 +244,12 @@ export function fileAtViewportLine(rendered, threshold) {
     }
   }
   return best;
+}
+
+export async function anchorIndexFor(paths) {
+  const index = new Map();
+  for (const path of paths) index.set(await anchorIdFor(path), path);
+  return index;
 }
 
 export async function anchorIdFor(path) {
