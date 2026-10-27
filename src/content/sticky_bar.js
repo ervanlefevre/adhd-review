@@ -186,7 +186,7 @@ export class StickyBar {
       [keys.markGroup, "mark the whole current group as viewed"],
       [keys.panel, "toggle the review panel (progress, notes, wrap-up)"],
       ["alt+n", "add a note for the current file"],
-      [keys.refresh, "refresh from GitHub"],
+      [keys.refresh, `refresh from ${this.platform || "GitHub"}`],
       [keys.help, "toggle this help"],
     ];
     this.help = document.createElement("div");

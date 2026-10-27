@@ -10,18 +10,20 @@ const KEY_LABELS = {
   nextPending: "Next pending file",
   markGroup: "Mark whole group viewed",
   panel: "Open side panel",
-  refresh: "Refresh from GitHub",
+  refresh: "Refresh from the host",
   help: "Show keys",
 };
 
 const form = document.getElementById("form");
 const tokenInput = document.getElementById("token");
+const gitlabTokenInput = document.getElementById("gitlabToken");
+const tokenInputs = { github: tokenInput, gitlab: gitlabTokenInput };
+const connectionStatuses = { github: document.getElementById("connection"), gitlab: document.getElementById("connectionGitlab") };
 const rulesInput = document.getElementById("rules");
 const lineCapInput = document.getElementById("lineCap");
 const scrollOffsetInput = document.getElementById("scrollOffset");
 const progressColorInput = document.getElementById("progressColor");
 const keysContainer = document.getElementById("keys");
-const connectionStatus = document.getElementById("connection");
 const rulesStatus = document.getElementById("rulesStatus");
 const saveStatus = document.getElementById("saveStatus");
 
@@ -32,7 +34,8 @@ function setStatus(element, text, kind) {
 
 async function fill() {
   const settings = await loadSettings();
-  tokenInput.value = await loadToken();
+  tokenInput.value = await loadToken("github");
+  gitlabTokenInput.value = await loadToken("gitlab");
   rulesInput.value = settings.rulesText;
   lineCapInput.value = settings.lineCap;
   scrollOffsetInput.value = settings.scrollOffset;
@@ -61,19 +64,23 @@ function validateRules() {
 
 rulesInput.addEventListener("input", validateRules);
 
-document.getElementById("test").addEventListener("click", async () => {
-  setStatus(connectionStatus, "Checking…");
-  const response = await chrome.runtime.sendMessage({ type: "checkConnection", token: tokenInput.value.trim() });
-  if (response.ok) setStatus(connectionStatus, `Connected as ${response.result}`, "ok");
-  else setStatus(connectionStatus, response.error, "error");
-});
+for (const button of document.querySelectorAll("button[data-host]")) {
+  const host = button.dataset.host;
+  button.addEventListener("click", async () => {
+    setStatus(connectionStatuses[host], "Checking…");
+    const response = await chrome.runtime.sendMessage({ type: "checkConnection", host, token: tokenInputs[host].value.trim() });
+    if (response.ok) setStatus(connectionStatuses[host], `Connected as ${response.result}`, "ok");
+    else setStatus(connectionStatuses[host], response.error, "error");
+  });
+}
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!validateRules()) return;
   const keys = {};
   for (const input of keysContainer.querySelectorAll("input")) keys[input.dataset.action] = input.value || DEFAULT_KEYS[input.dataset.action];
-  await saveToken(tokenInput.value);
+  await saveToken(tokenInput.value, "github");
+  await saveToken(gitlabTokenInput.value, "gitlab");
   await saveSettings({
     rulesText: rulesInput.value,
     lineCap: Math.max(1, Number(lineCapInput.value) || 150),

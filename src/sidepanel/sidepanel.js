@@ -1,6 +1,7 @@
 import { loadSettings, loadToken, loadPrLocal, updatePrLocal, parsePrUrl, prStorageKey } from "../settings.js";
 import { parseRulesText } from "../rules.js";
 import { orderFiles, groupFiles, progress, isViewed, changedLines } from "../review_model.js";
+import { hostForKey, origins } from "../hosts/index.js";
 
 const elements = Object.fromEntries(
   [
@@ -41,12 +42,13 @@ async function load({ force = false } = {}) {
   state.settings = await loadSettings();
   if (!state.prKey) {
     state.remote = null;
-    notice("Open a pull request's Files changed tab on github.com.");
+    notice("Open a pull request's Files changed tab on github.com, or a merge request's Changes tab on gitlab.com.");
     renderAll();
     return;
   }
-  if (!(await loadToken())) {
-    notice("No GitHub token yet. Add one in the extension options.", { options: true });
+  const host = hostForKey(state.prKey);
+  if (host.tokenRequiredToLoad && !(await loadToken(host.id))) {
+    notice(`No ${host.labels.tokenName} yet. Add one in the extension options.`, { options: true });
     renderAll();
     return;
   }
@@ -66,12 +68,12 @@ async function load({ force = false } = {}) {
   requestCurrentFile();
 }
 
-// Embedded in the GitHub page: ask the page which file is under review, so the panel
+// Embedded in the host page: ask the page which file is under review, so the panel
 // does not depend on having caught the last announcement.
 function requestCurrentFile() {
-  if (window.parent === window) return;
+  if (window.parent === window || !pageOrigin) return;
   try {
-    window.parent.postMessage({ source: "adhd-review", type: "requestState" }, "https://github.com");
+    window.parent.postMessage({ source: "adhd-review", type: "requestState" }, pageOrigin);
   } catch (error) {
     console.debug("[adhd-review] requestState failed", error);
   }
@@ -117,7 +119,7 @@ function renderHeader() {
   elements.prLink.textContent = state.remote.title;
   elements.prLink.title = state.remote.title;
   elements.prLink.href = state.remote.url;
-  elements.prNumber.textContent = `#${state.prKey.split("#")[1]}`;
+  elements.prNumber.textContent = hostForKey(state.prKey).numberLabel(state.prKey);
 }
 
 function renderProgress() {
@@ -306,18 +308,20 @@ function renderNotes() {
 }
 
 function renderWrapUp() {
+  const host = state.prKey ? hostForKey(state.prKey) : null;
   const comments = state.remote?.pendingReview?.comments || [];
   elements.commentsCount.textContent = comments.length ? `(${comments.length})` : "";
   elements.comments.replaceChildren(
     ...(comments.length
       ? comments.map((comment) => {
           const box = element("div", { className: `comment ${comment.outdated ? "outdated" : ""}` });
-          const jump = element("button", { className: "link", textContent: `${comment.path}${comment.line ? `:${comment.line}` : ""}` });
+          const where = comment.path ? `${comment.path}${comment.line ? `:${comment.line}` : ""}` : `(whole ${host.labels.noun})`;
+          const jump = element("button", { className: "link", textContent: where });
           jump.addEventListener("click", () => goToComment(comment));
           box.append(element("div", { className: "where" }, jump), element("div", { className: "body", textContent: comment.body }));
           return box;
         })
-      : [element("div", { className: "empty", textContent: state.remote ? "No pending comment on this pull request." : "" })])
+      : [draftsNotice(host)])
   );
   elements.notesPreview.textContent = state.local?.notes || "(no notes)";
 
@@ -336,7 +340,25 @@ function renderWrapUp() {
         })
       : [element("li", { className: "muted", textContent: "Nothing flagged." })])
   );
-  for (const button of submitButtons) button.disabled = !state.remote;
+  // Without the host's token the drafts are unknown and nothing can be published.
+  for (const button of submitButtons) button.disabled = !state.remote || Boolean(state.remote.draftsError);
+}
+
+// GitLab's draft notes need a token the progress does not: say so where they would be.
+function draftsNotice(host) {
+  if (!state.remote) return element("div", { className: "empty" });
+  const error = state.remote.draftsError;
+  if (!error) return element("div", { className: "empty", textContent: `No pending comment on this ${host.labels.noun}.` });
+  const box = element("div", { className: "empty" });
+  if (error === "no-token") {
+    box.textContent = `Add a ${host.labels.tokenName} in the options to list your draft notes and publish from here. `;
+    const link = element("button", { className: "link", textContent: "Open options" });
+    link.addEventListener("click", () => chrome.runtime.openOptionsPage());
+    box.append(link);
+  } else {
+    box.textContent = `Draft notes could not be read: ${error}`;
+  }
+  return box;
 }
 
 function element(tag, props = {}, ...children) {
@@ -364,7 +386,8 @@ function goToFile(path) {
 }
 
 function goToComment(comment) {
-  tellPage({ type: "goToComment", path: comment.path, databaseId: comment.databaseId });
+  if (!comment.path) return;
+  tellPage({ type: "goToComment", comment });
   tellPage({ type: "focusPage" });
 }
 
@@ -385,7 +408,13 @@ document.addEventListener("keydown", (event) => {
 
 async function markGroupViewed(group) {
   const pending = group.files.filter((file) => !isViewed(file));
-  if (!window.confirm(`Mark the ${pending.length} remaining file(s) of "${group.label}" as viewed on GitHub?`)) return;
+  const host = hostForKey(state.prKey);
+  if (!window.confirm(`Mark the ${pending.length} remaining file(s) of "${group.label}" as viewed on ${host.labels.platform}?`)) return;
+  // Hosts keeping the viewed state in the page: the page clicks the checkboxes.
+  if (!host.remoteViewed) {
+    tellPage({ type: "setViewedFiles", paths: pending.map((file) => file.path) });
+    return;
+  }
   for (const file of pending) {
     const response = await chrome.runtime.sendMessage({ type: "setViewed", prKey: state.prKey, path: file.path, viewed: true, appliedOnPage: false });
     if (!response.ok) {
@@ -447,7 +476,10 @@ elements.locate.addEventListener("click", () => {
 elements.settings.addEventListener("click", () => chrome.runtime.openOptionsPage());
 
 // Embedded in the page's sidebar: the close button asks the page to fold the sidebar.
-const embedded = new URLSearchParams(location.search).get("embedded") === "1";
+const query = new URLSearchParams(location.search);
+const embedded = query.get("embedded") === "1";
+// Origin of the page hosting the embedded panel; only the known hosts are trusted.
+const pageOrigin = origins.includes(query.get("origin")) ? query.get("origin") : null;
 elements.close.hidden = !embedded;
 elements.close.addEventListener("click", () => tellPage({ type: "closePanel" }));
 
@@ -483,10 +515,10 @@ function handleMessage(message) {
 }
 
 // Two channels: extension runtime messages (native side panel, background) and
-// postMessage from the GitHub page hosting the embedded panel.
+// postMessage from the host page hosting the embedded panel.
 chrome.runtime.onMessage.addListener((message) => handleMessage(message));
 window.addEventListener("message", (event) => {
-  if (event.origin !== "https://github.com" || event.data?.source !== "adhd-review") return;
+  if (!origins.includes(event.origin) || event.data?.source !== "adhd-review") return;
   handleMessage(event.data);
 });
 
@@ -498,7 +530,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     renderNotes();
     renderWrapUp();
   }
-  if (changes.settings || changes.token) load();
+  if (changes.settings || changes.token || changes.gitlabToken) load();
 });
 
 resolveTab();

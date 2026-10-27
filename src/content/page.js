@@ -1,11 +1,16 @@
 import { loadSettings, loadToken, loadPrLocal, updatePrLocal, parsePrUrl, prStorageKey } from "../settings.js";
 import { parseRulesText } from "../rules.js";
 import { orderFiles, groupFiles, progress, neighbourFile, nextPendingFile, positionInGroup, isViewed } from "../review_model.js";
-import { findRenderedFiles, fileAtViewportLine, anchorIdFor, anchorIndexFor, findFileLink, scrollToContainer, waitFor, isTypingTarget, controlForElement, describeUnmatched, describeViewedCandidates } from "./dom.js";
+import { fileAtViewportLine, waitFor, isTypingTarget } from "./dom_shared.js";
+import { hostForKey } from "../hosts/index.js";
+import * as githubDom from "../hosts/github/dom.js";
+import * as gitlabDom from "../hosts/gitlab/dom.js";
+import { loadRemote as loadGitlabRemote } from "../hosts/gitlab/page_data.js";
 import { StickyBar } from "./sticky_bar.js";
 import { Drawer } from "./drawer.js";
 
-const FILES_TABS = new Set(["files", "changes"]);
+// Page probing is the one part that differs per host; see src/hosts/<host>/dom.js.
+const DOM_BY_HOST = { github: githubDom, gitlab: gitlabDom };
 // Horizontal line (px from the top of the viewport) that decides which file is "current":
 // below GitHub's sticky toolbar and sticky file header.
 const CURRENT_FILE_LINE = 160;
@@ -86,7 +91,8 @@ class ReviewPage {
   // GitHub navigates without reloading: watch the URL.
   checkUrl() {
     const info = parsePrUrl(location.href);
-    const active = Boolean(info && FILES_TABS.has(info.tab));
+    const host = info ? hostForKey(info.prKey) : null;
+    const active = Boolean(info && host.isFilesTab(info));
     const key = active ? info.prKey : null;
     if (key === this.activeKey) return;
     this.activeKey = key;
@@ -98,6 +104,9 @@ class ReviewPage {
       return;
     }
     this.pr = info;
+    this.host = host;
+    this.dom = DOM_BY_HOST[host.id];
+    this.bar.platform = host.labels.platform;
     this.currentPath = null;
     this.load();
   }
@@ -110,16 +119,16 @@ class ReviewPage {
     this.bar.setKeys(this.settings.keys);
     this.bar.setColor(this.settings.progressColor);
     this.bar.render({ progress: null });
-    if (!(await loadToken())) {
-      this.bar.showMessage('No GitHub token yet: <a href="#" class="adhd-options">open the options</a>', { sticky: true });
+    if (this.host.tokenRequiredToLoad && !(await loadToken(this.host.id))) {
+      this.bar.showMessage(`No ${this.host.labels.tokenName} yet: <a href="#" class="adhd-options">open the options</a>`, { sticky: true });
       this.bar.message.querySelector(".adhd-options").addEventListener("click", (event) => {
         event.preventDefault();
         this.send({ type: "openOptions" });
       });
       return;
     }
-    this.bar.showMessage("Loading pull request from GitHub…", { sticky: true });
-    const response = await this.send({ type: "loadPr", prKey: this.pr.prKey, force });
+    this.bar.showMessage(`Loading ${this.host.labels.noun} from ${this.host.labels.platform}…`, { sticky: true });
+    const response = await this.loadRemote(force);
     if (!response.ok) {
       this.bar.showMessage(escapeHtml(response.error), { sticky: true });
       return;
@@ -127,8 +136,25 @@ class ReviewPage {
     this.remote = response.result;
     this.local = await loadPrLocal(this.pr.prKey);
     this.bar.clearMessage();
+    if (this.remote.codeReviewEnabled === false) {
+      this.bar.showMessage(`Sign in to ${this.host.labels.platform} to mark files as viewed; navigation works without it.`, { sticky: true });
+    }
     this.compute();
     this.rescan();
+  }
+
+  // GitHub: the background fetches everything from the API. GitLab: the file list and
+  // the viewed state only exist in the page (its metadata endpoint, its localStorage),
+  // so the page assembles the state and hands it to the background, which adds the
+  // draft notes from the API and caches it for the panel.
+  async loadRemote(force) {
+    if (this.host.id !== "gitlab") return this.send({ type: "loadPr", prKey: this.pr.prKey, force });
+    try {
+      const state = await loadGitlabRemote(this.pr);
+      return await this.send({ type: "storeRemote", prKey: this.pr.prKey, state });
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
   }
 
   compute() {
@@ -142,12 +168,13 @@ class ReviewPage {
     this.render();
   }
 
-  // GitHub's title links use "#diff-<sha256(path)>": the map is built once per file list.
+  // Anchor id -> path (GitHub's "#diff-<sha256(path)>", GitLab's file hash): built once
+  // per file list.
   buildAnchorIndex() {
     const signature = [...this.knownPaths].join("\n");
     if (signature === this.anchorIndexSignature) return;
     this.anchorIndexSignature = signature;
-    anchorIndexFor(this.knownPaths).then((index) => {
+    this.dom.anchorIndexFor(this.ordered).then((index) => {
       this.anchorIndex = index;
       this.scheduleRescan();
     });
@@ -205,7 +232,7 @@ class ReviewPage {
   rescan() {
     if (!this.remote) return;
     const startedAt = performance.now();
-    this.rendered = findRenderedFiles(this.knownPaths, this.rendered, this.anchorIndex);
+    this.rendered = this.dom.findRenderedFiles(this.knownPaths, this.rendered, this.anchorIndex);
     this.recordScan(performance.now() - startedAt);
     this.reportUnmatchedOnce();
     this.detect();
@@ -220,7 +247,7 @@ class ReviewPage {
     stats.total += elapsed;
     stats.max = Math.max(stats.max, elapsed);
     if (stats.count % 25 === 0 && stats.total / stats.count > 40) {
-      console.warn("[adhd-review] scan stats", JSON.stringify({ scans: stats.count, averageMs: Math.round(stats.total / stats.count), maxMs: Math.round(stats.max), ...describeUnmatched(this.knownPaths, this.rendered, 0) }));
+      console.warn("[adhd-review] scan stats", JSON.stringify({ scans: stats.count, averageMs: Math.round(stats.total / stats.count), maxMs: Math.round(stats.max), ...this.dom.describeUnmatched(this.knownPaths, this.rendered, 0) }));
     }
   }
 
@@ -228,10 +255,10 @@ class ReviewPage {
   // snippet of their markup so the matching can be adjusted to GitHub's DOM.
   reportUnmatchedOnce() {
     if (this.reportedUnmatched) return;
-    const report = describeUnmatched(this.knownPaths, this.rendered);
+    const report = this.dom.describeUnmatched(this.knownPaths, this.rendered);
     if (report.checkboxes === 0) {
       // No control recognised at all: show what carries the text "Viewed" on this page.
-      const candidates = describeViewedCandidates();
+      const candidates = this.dom.describeViewedCandidates();
       if (candidates.length === 0) return;
       this.reportedUnmatched = true;
       console.warn("[adhd-review] no Viewed control recognised; markup around the text Viewed:", JSON.stringify(candidates));
@@ -278,17 +305,17 @@ class ReviewPage {
     let entry = this.rendered.get(path);
     if (!entry) {
       let phase = performance.now();
-      const anchorId = await anchorIdFor(path);
+      const anchorId = await this.dom.anchorIdFor(this.fileAt(path) || { path });
       lap("anchor", phase);
       if (this.pendingReloadPath === path) {
-        location.hash = anchorId;
+        if (anchorId) location.hash = anchorId;
         location.reload();
         return;
       }
       phase = performance.now();
-      const link = findFileLink(path, anchorId);
+      const link = this.dom.findFileLink(path, anchorId);
       if (link) link.click();
-      else location.hash = anchorId;
+      else if (anchorId) location.hash = anchorId;
       lap(link ? "tree click" : "hash", phase);
       phase = performance.now();
       // Rescan only after the page mutated: polling with full scans starves GitHub's
@@ -298,28 +325,28 @@ class ReviewPage {
       entry = await waitFor(() => {
         if (!hashTried && performance.now() - phase > RENDER_TIMEOUT_MS / 2) {
           hashTried = true;
-          location.hash = anchorId;
+          if (anchorId) location.hash = anchorId;
           this.pageMutated = true;
         }
         if (!this.pageMutated) return null;
         this.pageMutated = false;
-        this.rendered = findRenderedFiles(this.knownPaths, this.rendered, this.anchorIndex);
+        this.rendered = this.dom.findRenderedFiles(this.knownPaths, this.rendered, this.anchorIndex);
         return this.rendered.get(path);
       }, RENDER_TIMEOUT_MS, 100);
       lap("wait render", phase);
       if (performance.now() - startedAt > 2000) {
-        console.warn("[adhd-review] slow jump to", path, timings.join(", "), JSON.stringify(describeUnmatched(this.knownPaths, this.rendered, 1)));
+        console.warn("[adhd-review] slow jump to", path, timings.join(", "), JSON.stringify(this.dom.describeUnmatched(this.knownPaths, this.rendered, 1)));
       }
       if (!entry) {
         this.pendingReloadPath = path;
-        this.bar.showMessage(`GitHub did not render <code>${escapeHtml(path)}</code>; press the same key again to reload the page on it.`);
+        this.bar.showMessage(`${this.host.labels.platform} did not render <code>${escapeHtml(path)}</code>; press the same key again to reload the page on it.`);
         this.currentPath = path;
         this.render();
         return;
       }
     }
     this.pendingReloadPath = null;
-    scrollToContainer(entry.container, this.settings.scrollOffset);
+    this.dom.scrollTo(entry, this.settings.scrollOffset);
     this.detectPausedUntil = performance.now() + DETECT_PAUSE_MS;
     this.setCurrent(path);
   }
@@ -348,7 +375,7 @@ class ReviewPage {
   pageCheckbox(path) {
     let entry = this.rendered.get(path);
     if (!entry?.checkbox?.isConnected) {
-      this.rendered = findRenderedFiles(this.knownPaths, this.rendered, this.anchorIndex);
+      this.rendered = this.dom.findRenderedFiles(this.knownPaths, this.rendered, this.anchorIndex);
       entry = this.rendered.get(path);
     }
     return entry?.checkbox?.isConnected ? entry.checkbox : null;
@@ -377,6 +404,7 @@ class ReviewPage {
       await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage: true });
       return true;
     }
+    if (!this.host.remoteViewed) return this.setViewedWhenRendered(path, viewed);
     this.bar.beginBusy(viewed ? "marking through the API…" : "unmarking through the API…");
     const response = await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage: false });
     this.bar.endBusy();
@@ -388,19 +416,52 @@ class ReviewPage {
     return true;
   }
 
+  // Hosts without an API for the viewed state (GitLab): the file's own checkbox is the
+  // only way, so wait for the page to stream the file in, then click it.
+  async setViewedWhenRendered(path, viewed) {
+    this.bar.beginBusy("waiting for the file to load…");
+    this.pageMutated = true;
+    const checkbox = await waitFor(() => {
+      if (!this.pageMutated) return null;
+      this.pageMutated = false;
+      return this.pageCheckbox(path);
+    }, RENDER_TIMEOUT_MS, 100);
+    this.bar.endBusy();
+    if (!checkbox) {
+      this.applyViewedLocally(path, !viewed);
+      this.bar.showMessage(`${this.host.labels.platform} has not loaded <code>${escapeHtml(path)}</code> yet; try again in a moment.`);
+      return false;
+    }
+    if (checkbox.checked !== viewed) {
+      checkbox.click();
+      this.verifyTick(path, checkbox, viewed);
+    }
+    await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage: true });
+    return true;
+  }
+
   async verifyTick(path, checkbox, viewed) {
     const current = () => (checkbox.isConnected ? checkbox : this.pageCheckbox(path));
-    this.bar.beginBusy(viewed ? "waiting for GitHub to tick…" : "waiting for GitHub to untick…");
-    const settled = await waitFor(() => current()?.checked === viewed, 5000, 150);
+    const platform = this.host.labels.platform;
+    this.bar.beginBusy(viewed ? `waiting for ${platform} to tick…` : `waiting for ${platform} to untick…`);
+    // GitLab ticks synchronously; GitHub only once its own request completes.
+    const settled = await waitFor(() => current()?.checked === viewed, this.host.remoteViewed ? 5000 : 1500, 150);
     if (settled || !current()) {
       this.bar.endBusy();
+      return;
+    }
+    if (!this.host.remoteViewed) {
+      this.bar.endBusy();
+      this.applyViewedLocally(path, !viewed);
+      const hint = this.remote?.codeReviewEnabled === false ? ": sign in to mark files as viewed" : "";
+      this.bar.showMessage(`${platform}'s checkbox did not react for <code>${escapeHtml(path)}</code>${hint}`);
       return;
     }
     const response = await this.send({ type: "setViewed", prKey: this.pr.prKey, path, viewed, appliedOnPage: false });
     this.bar.endBusy();
     this.bar.showMessage(
       response.ok
-        ? `GitHub's checkbox did not react for <code>${escapeHtml(path)}</code>; marked through the API (reload to see it ticked)`
+        ? `${platform}'s checkbox did not react for <code>${escapeHtml(path)}</code>; marked through the API (reload to see it ticked)`
         : escapeHtml(response.error)
     );
   }
@@ -430,9 +491,9 @@ class ReviewPage {
   // The user may tick GitHub's checkbox with the mouse: keep the state in sync.
   onCheckboxChange(event) {
     if (!this.remote) return;
-    const control = controlForElement(event.target);
+    const control = this.dom.controlForElement(event.target);
     if (!control) return;
-    const path = [...this.rendered].find(([, entry]) => entry.checkbox.element === control.element)?.[0];
+    const path = [...this.rendered].find(([, entry]) => entry.checkbox?.element === control.element)?.[0];
     if (!path) return;
     const file = this.fileAt(path);
     if (!file || isViewed(file) === control.checked) return;
@@ -467,6 +528,16 @@ class ReviewPage {
       if (!(await this.setViewed(file.path, true))) return;
     }
     await this.goToNextPending(from);
+  }
+
+  // The panel's "Mark all viewed" on hosts whose viewed state lives in the page.
+  markFiles(paths) {
+    this.queue = (this.queue || Promise.resolve())
+      .then(async () => {
+        for (const path of paths) if (!(await this.setViewed(path, true))) return;
+      })
+      .catch((error) => console.error("[adhd-review] mark files failed", error));
+    return this.queue;
   }
 
   async actionNote() {
@@ -570,13 +641,17 @@ class ReviewPage {
         if (message.prKey === this.pr.prKey) await this.goToFile(message.path);
         break;
       case "goToComment":
-        if (message.prKey === this.pr.prKey) {
-          await this.goToFile(message.path);
-          const anchor = `r${message.databaseId}`;
-          const target = await waitFor(() => document.getElementById(anchor), 1500);
+        if (message.prKey === this.pr.prKey && message.comment?.path) {
+          await this.goToFile(message.comment.path);
+          const container = this.rendered.get(message.comment.path)?.container;
+          const target = await waitFor(() => this.dom.commentTarget(container, message.comment), 1500);
+          const hash = this.dom.commentHash(message.comment);
           if (target) target.scrollIntoView({ block: "center" });
-          else location.hash = anchor;
+          else if (hash) location.hash = hash;
         }
+        break;
+      case "setViewedFiles":
+        if (message.prKey === this.pr.prKey && this.remote) await this.markFiles(message.paths || []);
         break;
       case "keyPress":
         if (message.prKey === this.pr.prKey && this.remote) {
@@ -611,7 +686,7 @@ class ReviewPage {
       this.local = { later: {}, notes: "", currentPath: null, ...change.newValue };
       this.render();
     }
-    if (changes.settings || changes.token) this.load();
+    if (changes.settings || changes.token || changes.gitlabToken) this.load();
   }
 
   send(message) {
