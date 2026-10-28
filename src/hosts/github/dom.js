@@ -233,6 +233,11 @@ export function scrollTo(entry, offset) {
   scrollToContainer(entry.container, offset);
 }
 
+// Below GitHub's sticky toolbar and sticky file header.
+export function currentFileLine() {
+  return 160;
+}
+
 // A pending review comment is rendered with the id "r<databaseId>".
 export function commentTarget(container, comment) {
   return document.getElementById(`r${comment.databaseId}`);

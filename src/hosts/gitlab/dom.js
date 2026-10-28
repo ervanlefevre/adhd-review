@@ -3,7 +3,7 @@
 // the paths; the "Viewed" control is a plain checkbox flagged data-viewed-checkbox.
 // Files stream into the DOM after the first ones, so a file missing from the page is
 // simply not streamed yet.
-import { ViewedControl, scrollToContainer } from "../../content/dom_shared.js";
+import { ViewedControl, scrollToContainer, scrollParent } from "../../content/dom_shared.js";
 
 const FILE_SELECTOR = "diff-file[data-file-data]";
 const CHECKBOX_SELECTOR = "[data-viewed-checkbox]";
@@ -69,11 +69,28 @@ export function findFileLink() {
   return null;
 }
 
-// GitLab's sticky merge request header covers the top of the page; the element's
-// scroll-margin-top is how GitLab itself keeps a jumped-to file below it.
+const STICKY_HEADER_SELECTOR = ".merge-request-sticky-header";
+const DETECTION_GAP = 40;
+
+// The diffs scroll inside a panel, under the merge request's sticky header; a
+// jumped-to file lands below that header plus GitLab's own scroll margin.
 export function scrollTo(entry, offset) {
   const margin = parseInt(getComputedStyle(entry.container).scrollMarginTop, 10) || 0;
-  scrollToContainer(entry.container, offset + margin);
+  scrollToContainer(entry.container, offset + margin + coveringHeight());
+}
+
+// Horizontal line (viewport px) under which the file being read starts: just below
+// the sticky header, inside the scrolling panel.
+export function currentFileLine() {
+  const scroller = scrollParent(document.querySelector(FILE_SELECTOR));
+  const top = scroller ? scroller.getBoundingClientRect().top : 0;
+  return top + coveringHeight() + DETECTION_GAP;
+}
+
+function coveringHeight() {
+  const header = document.querySelector(STICKY_HEADER_SELECTOR);
+  if (!header || getComputedStyle(header).position !== "sticky") return 0;
+  return header.getBoundingClientRect().height;
 }
 
 // Line links are "#<file hash>_<old line>_<new line>": a draft note on a new line n

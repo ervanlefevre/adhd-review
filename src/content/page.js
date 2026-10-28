@@ -54,7 +54,8 @@ class ReviewPage {
         this.scheduleRescan();
       }
     }).observe(document.documentElement, { childList: true, subtree: true });
-    window.addEventListener("scroll", () => this.scheduleDetect(), { passive: true });
+    // Capture: scroll events do not bubble, and GitLab scrolls an inner panel.
+    window.addEventListener("scroll", () => this.scheduleDetect(), { passive: true, capture: true });
     window.addEventListener("hashchange", () => this.scheduleRescan());
     // The embedded panel asks for the current file when it (re)loads.
     window.addEventListener("message", (event) => {
@@ -280,7 +281,7 @@ class ReviewPage {
 
   detect() {
     if (!this.remote || performance.now() < (this.detectPausedUntil || 0)) return;
-    const path = fileAtViewportLine(this.rendered, CURRENT_FILE_LINE);
+    const path = fileAtViewportLine(this.rendered, this.dom.currentFileLine?.() ?? CURRENT_FILE_LINE);
     if (path && path !== this.currentPath) this.setCurrent(path);
   }
 

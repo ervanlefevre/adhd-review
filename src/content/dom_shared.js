@@ -44,9 +44,27 @@ export function fileAtViewportLine(rendered, threshold) {
   return best;
 }
 
+// The nearest ancestor that scrolls (GitLab's diffs live in an overflow panel, not in
+// the window); null when the window itself scrolls.
+export function scrollParent(element) {
+  let node = element?.parentElement;
+  while (node && node !== document.body && node !== document.documentElement) {
+    const style = getComputedStyle(node);
+    if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+// Brings the container's top to `offset` px below the top of whatever scrolls it.
 export function scrollToContainer(container, offset) {
-  const top = container.getBoundingClientRect().top + window.scrollY - offset;
-  window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+  const scroller = scrollParent(container);
+  const top = container.getBoundingClientRect().top;
+  if (scroller) {
+    scroller.scrollTop += top - scroller.getBoundingClientRect().top - offset;
+    return;
+  }
+  window.scrollTo({ top: Math.max(0, top + window.scrollY - offset), behavior: "auto" });
 }
 
 // Resolves with the first truthy value of `predicate`, null after `timeoutMs`. An
