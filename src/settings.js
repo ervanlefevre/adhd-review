@@ -1,5 +1,6 @@
 import { DEFAULT_RULES_TEXT } from "./rules.js";
 import { DEFAULT_LINE_CAP } from "./review_model.js";
+import { parseReviewUrl, hostForKey } from "./hosts/index.js";
 
 export const DEFAULT_KEYS = {
   next: "j",
@@ -31,13 +32,18 @@ export async function saveSettings(settings) {
   await chrome.storage.local.set({ settings });
 }
 
-export async function loadToken() {
-  const { token } = await chrome.storage.local.get("token");
-  return token || "";
+// One token per host. The GitHub one keeps its historical "token" key.
+export const TOKEN_KEYS = { github: "token", gitlab: "gitlabToken" };
+
+export async function loadToken(host = "github") {
+  const key = TOKEN_KEYS[host] || TOKEN_KEYS.github;
+  const stored = await chrome.storage.local.get(key);
+  return stored[key] || "";
 }
 
-export async function saveToken(token) {
-  await chrome.storage.local.set({ token: token.trim() });
+export async function saveToken(token, host = "github") {
+  const key = TOKEN_KEYS[host] || TOKEN_KEYS.github;
+  await chrome.storage.local.set({ [key]: token.trim() });
 }
 
 // Per pull request local state: later flags, notes, current file.
@@ -58,15 +64,11 @@ export async function updatePrLocal(prKey, patch) {
   return next;
 }
 
+// Whatever the host, a review page is described by `{ host, prKey, tab, ... }`.
 export function parsePrUrl(url) {
-  const match = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(\/[a-z]+)?/.exec(url || "");
-  if (!match) return null;
-  const [, owner, repo, number, tab] = match;
-  return { owner, repo, number: Number(number), tab: (tab || "").replace("/", ""), prKey: `${owner}/${repo}#${number}` };
+  return parseReviewUrl(url);
 }
 
 export function parsePrKey(prKey) {
-  const match = /^([^/]+)\/([^#]+)#(\d+)$/.exec(prKey);
-  if (!match) throw new Error(`Invalid pull request key: ${prKey}`);
-  return { owner: match[1], repo: match[2], number: Number(match[3]) };
+  return hostForKey(prKey).parseKey(prKey);
 }

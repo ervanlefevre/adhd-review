@@ -1,15 +1,16 @@
 {
   "manifest_version": 3,
   "name": "ADHD Review",
-  "version": "0.1.1",
-  "description": "Paces large GitHub pull request reviews: review order by domain, keyboard navigation, weighted progress, notes and a wrap-up step.",
+  "version": "0.2.0",
+  "description": "Paces large GitHub pull request and GitLab merge request reviews: review order, keyboard navigation, progress, notes, wrap-up.",
   "permissions": [
     "storage",
     "sidePanel"
   ],
   "host_permissions": [
     "https://github.com/*",
-    "https://api.github.com/*"
+    "https://api.github.com/*",
+    "https://gitlab.com/*"
   ],
   "background": {
     "service_worker": "src/background.js",
@@ -30,7 +31,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://github.com/*/*/pull/*"
+        "https://github.com/*/*/pull/*",
+        "https://gitlab.com/*/-/merge_requests/*"
       ],
       "js": [
         "src/content/content.js"
@@ -47,7 +49,8 @@
         "src/*"
       ],
       "matches": [
-        "https://github.com/*"
+        "https://github.com/*",
+        "https://gitlab.com/*"
       ]
     }
   ],

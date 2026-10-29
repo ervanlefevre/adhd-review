@@ -4,6 +4,7 @@
 // checkbox labelled "Viewed", and it contains the file path as text. The known
 // paths come from the API, which also keeps diff lines that happen to look like a
 // path from being mistaken for a header (they have no checkbox near them).
+import { ViewedControl, scrollToContainer } from "../../content/dom_shared.js";
 
 const MAX_ANCESTOR_DEPTH = 10;
 // Path texts inside these never belong to a file header (file tree, sidebars).
@@ -13,33 +14,6 @@ const EXCLUDED_ANCESTORS = '[role="tree"], [role="treeitem"], nav, aside, [role=
 const DATA_PATH_SELECTOR = "[data-path], [data-file-path]";
 
 const VIEWED_TEXT = /^\s*viewed\s*$/i;
-
-// GitHub's "Viewed" control, whatever it is made of: a native checkbox (classic page),
-// a custom checkbox or toggle button (new React page). Every control exposes the same
-// surface: `element`, `checked`, `isConnected`, `click()`.
-class ViewedControl {
-  constructor(element, kind) {
-    this.element = element;
-    this.kind = kind;
-  }
-
-  get checked() {
-    if (this.kind === "input") return this.element.checked;
-    // GitHub's toggle button carries aria-pressed and a filled/empty checkbox icon;
-    // the icon is what the user sees, so it wins when present.
-    const icon = this.element.querySelector(".octicon-checkbox-fill, .octicon-checkbox");
-    if (icon) return icon.classList.contains("octicon-checkbox-fill");
-    return this.element.getAttribute("aria-checked") === "true" || this.element.getAttribute("aria-pressed") === "true";
-  }
-
-  get isConnected() {
-    return this.element.isConnected;
-  }
-
-  click() {
-    this.element.click();
-  }
-}
 
 function labelText(element) {
   const texts = [element.getAttribute("aria-label"), element.getAttribute("title")];
@@ -230,30 +204,15 @@ function normalizeText(text) {
   return (text || "").replace(/[\s\p{Cf}]/gu, "");
 }
 
-// The rendered file whose block crosses the horizontal line at `threshold` px from the
-// top of the viewport; falls back to the last block that starts above it.
-export function fileAtViewportLine(rendered, threshold) {
-  let best = null;
-  let bestTop = -Infinity;
-  for (const [path, entry] of rendered) {
-    const rect = entry.container.getBoundingClientRect();
-    if (rect.top <= threshold && rect.bottom > threshold) return path;
-    if (rect.top <= threshold && rect.top > bestTop) {
-      bestTop = rect.top;
-      best = path;
-    }
-  }
-  return best;
-}
-
-export async function anchorIndexFor(paths) {
+// GitHub's title links and tree links use "#diff-<sha256(path)>".
+export async function anchorIndexFor(files) {
   const index = new Map();
-  for (const path of paths) index.set(await anchorIdFor(path), path);
+  for (const file of files) index.set(await anchorIdFor(file), file.path);
   return index;
 }
 
-export async function anchorIdFor(path) {
-  const bytes = new TextEncoder().encode(path);
+export async function anchorIdFor(file) {
+  const bytes = new TextEncoder().encode(file.path);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
   return `diff-${hex}`;
@@ -270,30 +229,22 @@ function cssEscape(value) {
   return CSS.escape(value);
 }
 
-export function scrollToContainer(container, offset) {
-  const top = container.getBoundingClientRect().top + window.scrollY - offset;
-  window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+export function scrollTo(entry, offset) {
+  scrollToContainer(entry.container, offset);
 }
 
-// Resolves with the first truthy value of `predicate`, null after `timeoutMs`. An
-// exception thrown by the predicate rejects instead of leaving the promise pending.
-export function waitFor(predicate, timeoutMs, intervalMs = 150) {
-  return new Promise((resolve, reject) => {
-    const startedAt = Date.now();
-    const tick = () => {
-      let value;
-      try {
-        value = predicate();
-      } catch (error) {
-        reject(error);
-        return;
-      }
-      if (value) return resolve(value);
-      if (Date.now() - startedAt > timeoutMs) return resolve(null);
-      setTimeout(tick, intervalMs);
-    };
-    tick();
-  });
+// Below GitHub's sticky toolbar and sticky file header.
+export function currentFileLine() {
+  return 160;
+}
+
+// A pending review comment is rendered with the id "r<databaseId>".
+export function commentTarget(container, comment) {
+  return document.getElementById(`r${comment.databaseId}`);
+}
+
+export function commentHash(comment) {
+  return `r${comment.databaseId}`;
 }
 
 // Diagnostics: a short description of the checkboxes the scan could not attach to a
@@ -326,10 +277,4 @@ export function describeUnmatched(knownPaths, rendered, limit = 2) {
     return { levels, markup };
   });
   return { knownPaths: knownPaths.size, rendered: rendered.size, checkboxes: checkboxes.length, unmatched: unmatched.length, samples };
-}
-
-export function isTypingTarget(target) {
-  if (!(target instanceof Element)) return false;
-  if (target.closest("input, textarea, select, [contenteditable=''], [contenteditable='true'], [role='textbox']")) return true;
-  return false;
 }

@@ -34,7 +34,8 @@ export class Drawer {
     });
 
     this.frame = document.createElement("iframe");
-    this.frame.src = chrome.runtime.getURL("src/sidepanel/sidepanel.html?embedded=1");
+    // The panel needs the page's origin to post messages back to it.
+    this.frame.src = chrome.runtime.getURL(`src/sidepanel/sidepanel.html?embedded=1&origin=${encodeURIComponent(location.origin)}`);
     this.frame.title = "ADHD Review panel";
     important(this.frame, { display: "block", width: "100%", height: "100%", border: "0", margin: "0", padding: "0", background: "transparent" });
     this.loaded = new Promise((resolve) => this.frame.addEventListener("load", resolve, { once: true }));

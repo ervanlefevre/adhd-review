@@ -27,8 +27,17 @@
       <label for="token">Personal access token</label>
       <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="ghp_… or github_pat_…">
       <p class="hint">Classic token with the <code>repo</code> scope. If your organization enforces SAML SSO, authorize the token for it (token settings → Configure SSO). Stored only in this browser profile.</p>
-      <button type="button" id="test" class="secondary">Test connection</button>
+      <button type="button" id="test" class="secondary" data-host="github">Test connection</button>
       <span id="connection" class="status"></span>
+    </section>
+
+    <section>
+      <h2>GitLab token (gitlab.com)</h2>
+      <label for="gitlabToken">Personal access token</label>
+      <input id="gitlabToken" type="password" autocomplete="off" spellcheck="false" placeholder="glpat-…">
+      <p class="hint">Scope <code>api</code>. Only the wrap-up needs it (your draft notes, publishing, approving): progress and navigation read the merge request page itself. Stored only in this browser profile.</p>
+      <button type="button" id="testGitlab" class="secondary" data-host="gitlab">Test connection</button>
+      <span id="connectionGitlab" class="status"></span>
     </section>
 
     <section>
